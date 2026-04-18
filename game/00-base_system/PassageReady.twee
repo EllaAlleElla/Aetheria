@@ -1,4 +1,6 @@
 :: PassageReady [noreturn nobr]
-<<set $EnemyCount = $enemies.length>>
+<<if $Enemy !== []>>
+    <<set $EnemyCount = $Enemy.length>>
+<</if>>
 
 <<timeWidget>>
