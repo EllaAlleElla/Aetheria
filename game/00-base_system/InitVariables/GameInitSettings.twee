@@ -1,2 +1,2 @@
-:: Game Settings
+:: Game Init Settings
 <<set $AllowNSFW = true>>/* 是否允许游戏中的nsfw内容 */

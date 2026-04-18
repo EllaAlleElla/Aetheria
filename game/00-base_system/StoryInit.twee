@@ -1,7 +1,7 @@
 :: StoryInit [noreturn]
 
 /* 游戏机制 */
-<<include "Game Settings">>
+<<include "Game Init Settings">>
 <<include "Game Base">>
 
 <<include "Battle Data">>
