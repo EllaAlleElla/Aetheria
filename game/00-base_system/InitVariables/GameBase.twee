@@ -1,0 +1,2 @@
+:: Game Base
+<<set $nsfwEnd = "">>/* nsfw段结束后转到何处 */

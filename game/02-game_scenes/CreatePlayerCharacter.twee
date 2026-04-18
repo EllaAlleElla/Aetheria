@@ -1,0 +1,28 @@
+:: Create Player Character-start
+<span style="opacity: 0.5">现在角色创建流程还不完善，暂时请选择默认开局。</span>
+
+<<link "作为流浪儿开局">>
+    <<goto "Create Player Character-name">>
+<</link>>
+
+:: Create Player Character-name
+你的名字是<<textbox "$PlayerName" "">>
+
+<<link "">>
+    <<goto "Create Player Character-gender">>
+<</link>>
+
+:: Create Player Character-gender
+你的性别是？
+
+<<link "男">>
+    <<set $PlayerActualGender = "male">>
+    <<set $PlayerDailyGender = "male">>
+    <<goto "Create Player Character-">>
+<</link>>
+
+<<link "女">>
+    <<set $PlayerActualGender = "female">>
+    <<set $PlayerDailyGender = "female">>
+    <<goto "Create Player Character-">>
+<</link>>

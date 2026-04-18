@@ -1,0 +1,27 @@
+:: Set Status [widget nobr]
+
+/* 便捷设置带上限的新数值，只是下面setStat的组件，实际不使用 */
+<<widget "capStat">>
+    <<set _name = _args[0]>>
+    
+    /* 1. 尝试从 setup.statLimits 获取配置 */
+    <<set _limit = setup.statLimits[_name]>>
+    
+    /* 2. 确定最小值：优先使用 setup.statLimits 定义的数据，如果undef则默认为0 */
+    <<set _min = (_limit ? _limit[0] : (_args[1] !== undefined ? _args[1] : 0))>>
+    
+    /* 3. 确定最大值：优先使用 setup.statLimits 定义的数据，如果undef则默认为100 */
+    <<set _max = (_limit ? _limit[1] : (_args[2] !== undefined ? _args[2] : 100))>>
+    
+    /* 4. 执行限制 */
+    <<set State.variables[_name] = Math.clamp(State.variables[_name], _min, _max)>>
+<</widget>>
+
+/* 便捷改数值 */
+<<widget "setStat">>
+    <<set _name = _args[0], _amt = _args[1]>>
+    <<set State.variables[_name] += _amt>>
+    <<capStat _name>> /* 自动调用上面修改过的 capStat */
+<</widget>>
+
+/* 使用例：<<setStat "智力" "+" 2 "green">>，显示为绿字+++智力，显示不影响任何实际数值 */

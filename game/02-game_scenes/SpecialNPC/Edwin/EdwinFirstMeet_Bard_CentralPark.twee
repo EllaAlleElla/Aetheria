@@ -1,0 +1,224 @@
+:: Bard Edwin First Meet-Central Park-talking start
+<<nobr>>
+<<if $PlayerSpecialAttitude === "rude">>
+    “喂，诗人。”你气势汹汹地走过去。他震惊地抬起头看着你。
+    <br>
+    “嗯……您有什么事吗？”他停下弹琴的动作，不确定你是来干什么的。他水绿色的眼睛闪烁着，里面能看出疑虑。
+    <br>
+    <br>
+    <<link "给我弹琴！">>
+        <<goto "Bard Edwin First Meet-Central Park-talking rude continue">>
+    <</link>>
+    <br>
+    <<link "不准弹了！">>
+        <<goto "Bard Edwin First Meet-Central Park-talking rude stop">>
+    <</link>>
+    <br>
+    <<link "一言不发">>
+        <<goto "Bard Edwin First Meet-Central Park-talking rude silence">>
+    <</link>>
+    <br>
+    <<link "问他名字">>
+        <<set $PlayerKnowEdwinName = true>>
+        <<goto "Bard Edwin First Meet-Central Park-talking rude ask">>
+    <</link>>
+    <<else>>
+        “能打扰一下吗？”
+        <br>
+        “嗯？”他停下拨弦的动作抬起头，水绿色的眼睛看向你，脸上还带着未尽的微笑。
+        <br>
+        他长而柔顺的靛蓝色头发顺着他的动作从肩膀上滑下来，在风中摇晃着。
+        <br>
+        <br>
+        <<link "称赞他的演奏">>
+            <<set $EdwinLove += 2>>
+            <<goto "Bard Edwin First Meet-Central Park-talking praise">>
+        <</link>>
+        <br>
+        <<link "请他停下">>
+            <<goto "Bard Edwin First Meet-Central Park-talking stop">>
+        <</link>>
+        <br>
+        <<link "一言不发">>
+            <<goto "Bard Edwin First Meet-Central Park-talking silence">>
+        <</link>>
+        <br>
+        <<link "问他名字">>
+            <<set $PlayerKnowEdwinName = true>>
+            <<goto "Bard Edwin First Meet-Central Park-talking ask">>
+        <</link>>
+<</if>>
+<</nobr>>
+
+:: Bard Edwin First Meet-Central Park-talking rude continue
+“停什么，给我继续弹！”你要求他弹一首你想听的歌。
+
+“……？”他看起来很意外。透过他垂在肩上的靛蓝色头发，你可以看见他的手原本已经靠近了佩剑，现在又放了回去。
+
+“好吧……？”他的手迟疑地搭上琴弦，开始弹奏。一开始他还关注着你的微小动作，后来就放松了不少，一曲奏毕时，他已经完全恢复了一开始那种轻松闲适的样子。
+
+“还有什么事吗？”他抬头看向你。
+
+
+<<nobr>>
+<<link "问他名字">>
+    <<set $PlayerKnowEdwinName = true>>
+    <<goto "Bard Edwin First Meet-Central Park-talking rude continue ask">>
+<</link>>
+<br>
+<<link "称赞他的演奏">>
+    <<set $EdwinLove += 2>>
+    <<goto "Bard Edwin First Meet-Central Park-talking rude continue praise">>
+<</link>>
+<br>
+<<link "离开">>
+    <<goto "Bard Edwin First Meet-Central Park-talking rude continue leave">>
+<</link>>
+<</nobr>>
+
+:: Bard Edwin First Meet-Central Park-talking rude continue ask
+“啊，我是艾德温。”他朝你笑了一下，然后继续弹琴。
+
+
+<<link "继续">>
+    <<goto "Valentia-Central Park">>
+<</link>>
+
+:: Bard Edwin First Meet-Central Park-talking rude continue praise
+“谢谢你。”他露出一个微笑，然后继续弹琴。
+
+
+<<link "继续">>
+    <<goto "Valentia-Central Park">>
+<</link>>
+
+:: Bard Edwin First Meet-Central Park-talking rude continue leave
+尽管略带疑惑，他还是目送你离开了。
+
+
+<<link "继续">>
+    <<goto "Valentia-Central Park">>
+<</link>>
+
+:: Bard Edwin First Meet-Central Park-talking rude stop
+他警惕地看着你，手已经搭在了腰间的佩剑上。“为什么？”相比起他的上一句话，这句的声音显然更冷。
+
+他似乎不打算就这样听你的作罢。
+
+
+<<link "给他点颜色瞧瞧">>
+    <<run $Enemy.push({
+        name:"蓝发的诗人",
+        ShownGender:"他",
+        hp:800,
+        ShownHP:"不到一百",
+        RemainHP:800,
+        atk:5,
+        ShownATK:"也就个位数",
+        mp:80000,
+        ShownMP:"不到一百",
+        RemainMP:80000,
+        ShownLV:"也就十几",
+        spell:[],
+        MagicLevel:500,
+        RemainMagicLevel:500,
+        SpeedLevel:10,
+        RemainSpeedLevel:10,
+        status:"active"})>>
+    <<set $BattleWin = "Bard Edwin First Meet-Central Park-talking rude stop win">>
+    <<set $BattleLose = "Bard Edwin First Meet-Central Park-talking rude stop lose">>
+    <<set $EdwinLove += -10>>
+    <<goto "Battle">>
+<</link>>
+
+<<link "离开">>
+    <<goto "Bard Edwin First Meet-Central Park-talking rude stop leave">>
+<</link>>
+
+:: Bard Edwin First Meet-Central Park-talking rude stop win
+“你……”他震惊地看着你，完全没预料到你的实力如此之强。他的表情变得复杂。
+
+<span style="opacity: 0.5">这个分支的代码都还没写，很多链接点进去也不会有反应。
+说真的，我连角色创建流程都还没写，战斗也没搓完，你真的指望我写了这么细的东西吗？</span>
+
+
+<<nobr>>
+<<if $AllowNSFW === true>>
+    <<link "侵犯">>
+        <<set $EdwinLove += -100>>
+        <<run $EdwinSpecialAttitude.push("unforgivable")>>
+        <<run $EdwinSpecialStatus.push("trauma")>>
+        <<goto "Bard Edwin First Meet-Central Park-nsfw">>
+    <</link>>
+<</if>>
+<br>
+<<link "抢劫">>
+    <<set $EdwinLove += -10>>
+    <<goto "">>
+<</link>>
+<br>
+<<link "嘲笑">>
+    <<set $EdwinLove += -5>>
+    <<goto "">>
+<</link>>
+<br>
+<<link "离开">>
+    <<goto "">>
+<</link>>
+<br>
+<<link "杀害">>
+    <<set $EdwinLove += -50>>
+    <<run $EdwinSpecialAttitude.push("caution")>>
+    <<goto "">>
+<</link>>
+<</nobr>>
+
+:: Bard Edwin First Meet-nsfw
+“什么——不、等等，求你了！”意识到你的意图后他惊慌地试图推开你，尽管成效甚微。显然他相当依赖法术，他的力气相较于他的魔法水平弱得惊人。
+
+他试图求助，但四周本就不多的行人在见证过你们的战斗后全都不敢上前。
+
+
+<<link "将他带去无人处">>
+    <<set $nsfwEnd = "Bard Edwin First Meet-Central Park-nsfw-hide">>
+    <<goto "Bard Edwin First Meet-Central Park-nsfw-hide-scene">>
+<</link>>
+
+<<link "就地开始">>
+    <<set $nsfwEnd = "Bard Edwin First Meet-Central Park-nsfw-noticed">>
+    <<goto "Bard Edwin First Meet-Central Park-nsfw-noticed-scene">>
+<</link>>
+
+:: Bard Edwin First Meet-Central Park-nsfw-hide-scene
+
+<<include "NSFW-Non consensual-Dominant">>
+
+:: Bard Edwin First Meet-Central Park-nsfw-hide
+
+
+:: Bard Edwin First Meet-Central Park-nsfw-noticed-scene
+
+<<include "NSFW-Non consensual-Dominant">>
+
+:: Bard Edwin First Meet-Central Park-nsfw-noticed
+
+
+:: Bard Edwin First Meet-Central Park-talking rude stop lose
+你输了。
+
+他站在不远处看着你，将佩剑收回了腰间。“你还是回去吧？”他说。
+
+他似乎不打算对你做什么，只是坐回了他的位置，手搭在琴弦上，目光停留在你身上。他的表情很平静。
+
+<span style="opacity: 0.5">
+是的，这个链接的代码我还没写。
+</span>
+:: Bard Edwin First Meet-Central Park-talking rude stop leave
+你不想挑起冲突，最终还是离开了那里。
+
+你能感到他一言不发的注视。回到原处时，你听到他又开始弹琴。
+
+
+<<link "继续">>
+    <<goto "Valentia-Central Park">>
+<</link>>

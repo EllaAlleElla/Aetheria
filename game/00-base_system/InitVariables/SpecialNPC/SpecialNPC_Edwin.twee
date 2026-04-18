@@ -1,0 +1,13 @@
+:: Special NPC-Edwin
+/*设置*/
+<<set $EdwinMode = "HiddenBard">>/* 艾德温为哪种背景 */
+
+/*数据*/
+<<set $EdwinLove = 0>>/* 艾德温好感 */
+
+/*状态*/
+<<set $EdwinSpecialAttitude = []>>/* 艾德温对玩家的特殊态度 */
+<<set $EdwinSpecialStatus = []>>/* 艾德温的特殊状态 */
+
+<<set $PlayerHaveMetEdwin = false>>/* 玩家是否见过艾德温 */
+<<set $PlayerKnowEdwinName = false>>/* 玩家是否知道艾德温的名字 */

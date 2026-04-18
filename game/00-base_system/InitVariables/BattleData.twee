@@ -1,0 +1,6 @@
+:: Battle Data
+<<set $Enemy = []>>/* 数组，储存敌人数据 */
+<<set $EnemyCount = 0>>/* 敌人数量 */
+
+<<set $BattleWin = "">>/* 战斗胜利后跳转到哪个段落 */
+<<set $BattleLose = "">>/* 战斗失败后跳转到哪个段落 */

@@ -1,0 +1,18 @@
+:: StoryInit [noreturn]
+
+/* 游戏机制 */
+<<include "Game Settings">>
+<<include "Game Base">>
+
+<<include "Battle Data">>
+
+/* 玩家数据 */
+<<include "Player Data">>
+
+/* 特殊npc */
+<<include "Special NPC-Edwin">>
+
+/* 数据库 */
+<<include "Library-Spell Casting">>
+<<include "Library-Formation">>
+<<include "Library-Artifice">>

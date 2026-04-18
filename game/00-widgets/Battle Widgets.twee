@@ -1,0 +1,83 @@
+:: Battle Widgets [widget nobr]
+<<widget "castSpell">>
+  <<set _spell = $SpellLibrary[_args[0]]>>
+  <<set _chosen = _args[1]>>
+  <<set _caster = _args[2]>>
+  <<set _CastingLevel = _args[3]>>
+  
+  <<for _j = 0; _j < _spell.effects.length; _j++>>
+    <<set _eff = _spell.effects[_j]>>
+    <<set _realTarget = (_eff.target === "caster") ? _caster : _chosen>>
+    <<if _eff.scaling === "CastingLevel">>
+      <<set _realValue = _eff.value * _CastingLevel>>
+    <<elseif _eff.scaling !==null>>
+      <<set _realValue = _eff.value * _caster[_eff.scaling]>>
+    <<else>>
+      <<set _realValue = _eff.value>>
+    <</if>>
+
+
+    <<if _eff.type === "RemainHP">>
+      <<set _realTarget.RemainHP += _realValue>>
+    <<elseif _eff.type === "hp">>
+      <<set _realTarget.hp += _realValue>>
+    <<elseif _eff.type === "atk">>
+      <<set _realTarget.atk += _realValue>>
+    <<elseif _eff.type === "RemainMP">>
+      <<set _realTarget.RemainMP += _realValue>>
+    <<elseif _eff.type === "mp">>
+      <<set _realTarget.mp += _realValue>>
+    <<elseif _eff.type === "MagicLevel">>
+      <<set _realTarget.MagicLevel += _realValue>>
+    <<elseif _eff.type === "SpeedLevel">>
+      <<set _realTarget.SpeedLevel += _realValue>>
+    <<elseif _eff.type === "RemainMagicLevel">>
+      <<set _realTarget.RemainMagicLevel += _realValue>>
+    <<elseif _eff.type === "RemainSpeedLevel">>
+      <<set _realTarget.RemainSpeedLevel += _realValue>>
+    <<elseif _eff.type === "status">>
+      <<set _realTarget.status = _eff.value>>
+    <</if>>
+  <</for>>
+  <<= _caster.name>>对<<= _chosen.name>>释放了<<= _spell.name>>。
+<</widget>>
+
+<<widget "checkBattleEnd">>
+  <<set _anyActive = false>>
+  <<for _i = 0; _i < $Enemy.length; _i++>>
+    <<if $Enemy[_i].status === "active">>
+      <<set _anyActive = true>>
+    <</if>>
+  <</for>>
+  <<set _PlayerAlive = $Player.status === "active">>
+  <<if not _anyActive>>
+    <<set $Enemy = []>>
+    <<goto $BattleWin>>
+  <<elseif not _PlayerAlive>>
+    <<set $Enemy = []>>
+    <<goto $BattleLose>>
+  <</if>>
+<</widget>>
+
+<<widget "showEnemyInfo">>
+你看见一共有$EnemyCount个敌人。
+    <br>
+    <<for _i = 0; _i < $EnemyCount; _i++>>
+      <<if $Enemy[_i].status !== "active">>
+        <<= $Enemy[_i].name>>已经倒下了。
+      <<else>>
+        <<= $Enemy[_i].name>>是第<<= _i + 1>>个敌人。看起来大概<<= $Enemy[_i].ShownLV>>级，有大概<<= $Enemy[_i].ShownATK>>点攻击力、<<= $Enemy[_i].ShownHP>>点hp和<<= $Enemy[_i].ShownMP>>点mp。
+        <<set _hpRatio = $Enemy[_i].RemainHP / $Enemy[_i].hp>>
+        <<if _hpRatio > 0.8>>
+          <<= $Enemy[_i].ShownGender>>看起来状态良好。
+        <<elseif _hpRatio > 0.5>>
+          <<= $Enemy[_i].ShownGender>>看起来有些疲态。
+        <<elseif _hpRatio > 0.25>>
+          <<= $Enemy[_i].ShownGender>>的伤势相当严重。
+        <<else>>
+          <<= $Enemy[_i].ShownGender>>已经岌岌可危。
+        <</if>>
+      <</if>>
+      <br>
+    <</for>>
+<</widget>>

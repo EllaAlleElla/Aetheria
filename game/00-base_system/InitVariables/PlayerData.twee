@@ -1,0 +1,4 @@
+:: Player Data
+<<set $PlayerName = "A">>/* 玩家名称 */
+<<set $PlayerNickname = "小A">>/* 玩家昵称 */
+<<set $PlayerSpecialAttitude = "">>/* 玩家是否有特殊态度 */

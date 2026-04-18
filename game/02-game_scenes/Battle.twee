@@ -1,0 +1,29 @@
+:: Battle [nobr]
+<div id="EnemyInfo">
+    <<showEnemyInfo>>
+</div>
+<br>
+<div id="BattleRound">
+    <<include "Battle Round">>
+</div>
+<br>
+<<link "下一轮">>
+    <<checkBattleEnd>>
+    <<replace "#EnemyInfo">>
+        <<showEnemyInfo>>
+    <</replace>>
+    <<replace "#BattleRound">>
+        <<include "Battle Round">>
+    <</replace>>
+<</link>>
+
+:: Battle Round [nobr]
+
+当前版本还没写战斗流程。请点击下列链接决定战斗结果：
+<<link "胜利">>
+    <<goto $BattleWin>>
+<</link>>
+
+<<link "失败">>
+    <<goto BattleLose>>
+<</link>>

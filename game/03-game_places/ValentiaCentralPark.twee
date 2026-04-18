@@ -1,0 +1,55 @@
+:: Valentia-Central Park
+你正在瓦伦提亚的中心公园。<<nobr>>
+<<if $EdwinMode === "HiddenBard">>
+    <<if $PlayerHaveMetEdwin === true and $PlayerKnowEdwinName === true>>
+        艾德温在这里弹琴。
+        <<elseif $PlayerHaveMetEdwin === true>>
+            蓝发的诗人在这里弹琴。
+    <</if>>
+<</if>>
+<</nobr>>
+
+
+<<nobr>>
+<<set _x to random(1,100)>>
+<<if _x gte 66>>
+    阳光落在喷泉的石雕上，细碎的水花随风飘散，在空气中留下微微的凉意。石砖大道上，行人三三两两地走过，偶有孩童绕着树跑，风铃随之发出轻响。
+    <<elseif _x lte 33>>
+        一对老人并肩坐在木质长椅上，喷泉的水声低低地漫开来。环形走道边的树荫将阳光切成碎块，挂在枝头的风铃被微风轻轻推动，声音细而悠远。
+    <<else>>
+        鹅卵石小径蜿蜒绕过树丛，偶尔有行人擦身而过，脚步不紧不慢。喷泉的水在午后的光里泛着白，树上的风铃叮咛作响。
+<</if>>
+<br>
+<br>
+<<if $EdwinMode === "HiddenBard">>
+    <<if $PlayerHaveMetEdwin === false>>
+        一位诗人坐在其中一棵树下，他抱着鲁特琴随意地拨弦，并没有在认真地表演。停下来听他弹琴的行人寥寥，更多人只是将他当成聊天的背景音，而他本人似乎也不甚在意。
+        <br>
+        <br>
+        <<link "上前搭话">>
+            <<set $PlayerHaveMetEdwin = true>>
+            <<goto "Bard Edwin First Meet-Central Park-talking start">>
+        <</link>>
+        <br>
+        <br>
+        <<link "听他弹琴">>
+            <<set $PlayerHaveMetEdwin = true>>
+            <<goto "Bard Edwin First Meet-Central Park-listening start">>
+        <</link>>
+        <<elseif $PlayerHaveMetEdwin === true and $PlayerKnowEdwinName === false>>
+            那位蓝发的诗人坐在其中一棵树下，他抱着鲁特琴随意地拨弦，并没有在认真地表演。停下来听他弹琴的行人寥寥，更多人只是将他当成聊天的背景音，而他本人似乎也不甚在意。
+            <br>
+            <br>
+            <<link "靠近">>
+                <<goto "Valentia-Central Park-Edwin">>
+            <</link>>
+        <<else>>
+            艾德温坐在其中一棵树下，他抱着鲁特琴随意地拨弦，并没有在认真地表演。停下来听他弹琴的行人寥寥，更多人只是将他当成聊天的背景音，而他本人也不甚在意。
+            <br>
+            <br>
+            <<link "靠近">>
+                <<goto "Valentia-Central Park-Edwin">>
+            <</link>>
+    <</if>>
+<</if>>
+<</nobr>>
