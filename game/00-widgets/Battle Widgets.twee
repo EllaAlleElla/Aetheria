@@ -10,7 +10,7 @@
     <<set _realTarget = (_eff.target === "caster") ? _caster : _chosen>>
     <<if _eff.scaling === "CastingLevel">>
       <<set _realValue = _eff.value * _CastingLevel>>
-    <<elseif _eff.scaling !==null>>
+    <<elseif _eff.scaling>>
       <<set _realValue = _eff.value * _caster[_eff.scaling]>>
     <<else>>
       <<set _realValue = _eff.value>>
@@ -80,4 +80,35 @@
       <</if>>
       <br>
     <</for>>
+<</widget>>
+
+<<widget "canCastSpell">>
+  /* _args[0]：法术数据（_spellData），_args[1]：施法者对象，_args[2]：CastingLevel */
+  <<set _checkSpell = _args[0]>>
+  <<set _checkCaster = _args[1]>>
+  <<set _checkCastingLevel = _args[2]>>
+  <<set _canCast = true>>
+
+  <<for _c = 0; _c < _checkSpell.effects.length; _c++>>
+    <<set _eff = _checkSpell.effects[_c]>>
+    <<if _eff.target === "caster" && _eff.value < 0>>
+      <<if _eff.scaling === "CastingLevel">>
+        <<set _realCost = Math.abs(_eff.value * _checkCastingLevel)>>
+      <<elseif _eff.scaling>>
+        <<set _realCost = Math.abs(_eff.value * _checkCaster[_eff.scaling])>>
+      <<else>>
+        <<set _realCost = Math.abs(_eff.value)>>
+      <</if>>
+
+      <<if _eff.type === "RemainMagicLevel" && _checkCaster.RemainMagicLevel < _realCost>>
+        <<set _canCast = false>>
+      <<elseif _eff.type === "RemainMP" && _checkCaster.RemainMP < _realCost>>
+        <<set _canCast = false>>
+      <<elseif _eff.type === "RemainHP" && _checkCaster.RemainHP < _realCost>>
+        <<set _canCast = false>>
+      <<elseif _eff.type === "RemainSpeedLevel" && _checkCaster.RemainSpeedLevel < _realCost>>
+        <<set _canCast = false>>
+      <</if>>
+    <</if>>
+  <</for>>
 <</widget>>

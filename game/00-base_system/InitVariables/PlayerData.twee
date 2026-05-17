@@ -2,3 +2,17 @@
 <<set $PlayerName = "A">>/* 玩家名称 */
 <<set $PlayerNickname = "小A">>/* 玩家昵称 */
 <<set $PlayerSpecialAttitude = "">>/* 玩家是否有特殊态度 */
+<<set $Player={
+    name:"A",
+    hp:50,
+    RemainHP:50,
+    mp:50,
+    RemainMP:50,
+    atk:5,
+    SpeedLevel:10,
+    RemainSpeedLevel:10,
+    MagicLevel:10,
+    RemainMagicLevel:10,
+    spell:[],
+    status:"alive"
+}>>

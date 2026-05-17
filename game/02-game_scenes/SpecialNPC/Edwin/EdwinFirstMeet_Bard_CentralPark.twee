@@ -119,7 +119,12 @@
         ShownMP:"不到一百",
         RemainMP:80000,
         ShownLV:"也就十几",
-        spell:[],
+        spell:[
+            "damage",
+            "freeze",
+            "revive",
+            "heal"
+        ],
         MagicLevel:500,
         RemainMagicLevel:500,
         SpeedLevel:10,
@@ -143,6 +148,7 @@
 
 
 <<nobr>>
+<<set $Enemy = []>>
 <<if $AllowNSFW === true>>
     <<link "侵犯">>
         <<set $EdwinLove += -100>>
@@ -173,7 +179,7 @@
 <</link>>
 <</nobr>>
 
-:: Bard Edwin First Meet-nsfw
+:: Bard Edwin First Meet-Central Park-nsfw
 “什么——不、等等，求你了！”意识到你的意图后他惊慌地试图推开你，尽管成效甚微。显然他相当依赖法术，他的力气相较于他的魔法水平弱得惊人。
 
 他试图求助，但四周本就不多的行人在见证过你们的战斗后全都不敢上前。
@@ -204,7 +210,7 @@
 
 
 :: Bard Edwin First Meet-Central Park-talking rude stop lose
-你输了。
+你输了。<<set $Enemy = []>>
 
 他站在不远处看着你，将佩剑收回了腰间。“你还是回去吧？”他说。
 

@@ -1,4 +1,7 @@
 :: PassageReady [noreturn nobr]
+
+<<set $Player.name = $PlayerName>>
+
 <<if $Enemy !== []>>
     <<set $EnemyCount = $Enemy.length>>
 <</if>>

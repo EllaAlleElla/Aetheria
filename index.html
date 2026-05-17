@@ -226,6 +226,8 @@ setup.statLimits = {
 };</script><tw-passagedata pid="1" name="Battle Data" tags="" position="100,100" size="100,100">&lt;&lt;set $Enemy = []&gt;&gt;/* 数组，储存敌人数据 */
 &lt;&lt;set $EnemyCount = 0&gt;&gt;/* 敌人数量 */
 
+&lt;&lt;set $CurrentRound = 1&gt;&gt;/* 战斗中回合数 */
+
 &lt;&lt;set $BattleWin = &quot;&quot;&gt;&gt;/* 战斗胜利后跳转到哪个段落 */
 &lt;&lt;set $BattleLose = &quot;&quot;&gt;&gt;/* 战斗失败后跳转到哪个段落 */</tw-passagedata><tw-passagedata pid="2" name="Game Base" tags="" position="225,100" size="100,100">&lt;&lt;set $nsfwEnd = &quot;&quot;&gt;&gt;/* nsfw段结束后转到何处 */</tw-passagedata><tw-passagedata pid="3" name="Game Init Settings" tags="" position="350,100" size="100,100">&lt;&lt;set $AllowNSFW = true&gt;&gt;/* 是否允许游戏中的nsfw内容 */</tw-passagedata><tw-passagedata pid="4" name="Library-Artifice" tags="" position="475,100" size="100,100"></tw-passagedata><tw-passagedata pid="5" name="Library-Formation" tags="" position="600,100" size="100,100"></tw-passagedata><tw-passagedata pid="6" name="Library-Spell Casting" tags="" position="725,100" size="100,100">&lt;&lt;set $SpellLibrary={
     damage:{
@@ -286,10 +288,41 @@ setup.statLimits = {
             value:-100,
             scaling:null}
         ]
+    },
+    heal:{
+        name:&quot;治愈术&quot;,
+        effects:[
+            {type:&quot;RemainHP&quot;,
+            target:&quot;chosen&quot;,
+            value:+5,
+            scaling:&quot;CastingLevel&quot;},
+            {type:&quot;RemainMagicLevel&quot;,
+            target:&quot;caster&quot;,
+            value:-5,
+            scaling:null},
+            {type:&quot;RemainMP&quot;,
+            target:&quot;caster&quot;,
+            value:-5,
+            scaling:&quot;CastingLevel&quot;}
+        ]
     }
 }&gt;&gt;</tw-passagedata><tw-passagedata pid="7" name="Player Data" tags="" position="850,100" size="100,100">&lt;&lt;set $PlayerName = &quot;A&quot;&gt;&gt;/* 玩家名称 */
 &lt;&lt;set $PlayerNickname = &quot;小A&quot;&gt;&gt;/* 玩家昵称 */
-&lt;&lt;set $PlayerSpecialAttitude = &quot;&quot;&gt;&gt;/* 玩家是否有特殊态度 */</tw-passagedata><tw-passagedata pid="8" name="Special NPC-Edwin" tags="" position="975,100" size="100,100">/*设置*/
+&lt;&lt;set $PlayerSpecialAttitude = &quot;&quot;&gt;&gt;/* 玩家是否有特殊态度 */
+&lt;&lt;set $Player={
+    name:&quot;A&quot;,
+    hp:50,
+    RemainHP:50,
+    mp:50,
+    RemainMP:50,
+    atk:5,
+    SpeedLevel:10,
+    RemainSpeedLevel:10,
+    MagicLevel:10,
+    RemainMagicLevel:10,
+    spell:[],
+    status:&quot;alive&quot;
+}&gt;&gt;</tw-passagedata><tw-passagedata pid="8" name="Special NPC-Edwin" tags="" position="975,100" size="100,100">/*设置*/
 &lt;&lt;set $EdwinMode = &quot;HiddenBard&quot;&gt;&gt;/* 艾德温为哪种背景 */
 
 /*数据*/
@@ -300,7 +333,11 @@ setup.statLimits = {
 &lt;&lt;set $EdwinSpecialStatus = []&gt;&gt;/* 艾德温的特殊状态 */
 
 &lt;&lt;set $PlayerHaveMetEdwin = false&gt;&gt;/* 玩家是否见过艾德温 */
-&lt;&lt;set $PlayerKnowEdwinName = false&gt;&gt;/* 玩家是否知道艾德温的名字 */</tw-passagedata><tw-passagedata pid="9" name="PassageReady" tags="noreturn nobr" position="1100,100" size="100,100">&lt;&lt;set $EnemyCount = $enemies.length&gt;&gt;
+&lt;&lt;set $PlayerKnowEdwinName = false&gt;&gt;/* 玩家是否知道艾德温的名字 */</tw-passagedata><tw-passagedata pid="9" name="PassageReady" tags="noreturn nobr" position="1100,100" size="100,100">&lt;&lt;set $Player.name = $PlayerName&gt;&gt;
+
+&lt;&lt;if $Enemy !== []&gt;&gt;
+    &lt;&lt;set $EnemyCount = $Enemy.length&gt;&gt;
+&lt;&lt;/if&gt;&gt;
 
 &lt;&lt;timeWidget&gt;&gt;</tw-passagedata><tw-passagedata pid="10" name="Start" tags="noreturn" position="1225,100" size="100,100">注意：这个版本并没有真的写完角色创建流程，仅作测试场景用，不可玩。点进去会半途出bug无法继续。
 当前版本，在开始游戏前，请一定要调整游戏设置！！！以防出现你难以预料的内容！！！
@@ -475,7 +512,7 @@ airp你就看去吧，我的眼里闪过决绝与犹豫，轻的，缓的，“�
     &lt;&lt;set _realTarget = (_eff.target === &quot;caster&quot;) ? _caster : _chosen&gt;&gt;
     &lt;&lt;if _eff.scaling === &quot;CastingLevel&quot;&gt;&gt;
       &lt;&lt;set _realValue = _eff.value * _CastingLevel&gt;&gt;
-    &lt;&lt;elseif _eff.scaling !==null&gt;&gt;
+    &lt;&lt;elseif _eff.scaling&gt;&gt;
       &lt;&lt;set _realValue = _eff.value * _caster[_eff.scaling]&gt;&gt;
     &lt;&lt;else&gt;&gt;
       &lt;&lt;set _realValue = _eff.value&gt;&gt;
@@ -545,6 +582,37 @@ airp你就看去吧，我的眼里闪过决绝与犹豫，轻的，缓的，“�
       &lt;&lt;/if&gt;&gt;
       &lt;br&gt;
     &lt;&lt;/for&gt;&gt;
+&lt;&lt;/widget&gt;&gt;
+
+&lt;&lt;widget &quot;canCastSpell&quot;&gt;&gt;
+  /* _args[0]：法术数据（_spellData），_args[1]：施法者对象，_args[2]：CastingLevel */
+  &lt;&lt;set _checkSpell = _args[0]&gt;&gt;
+  &lt;&lt;set _checkCaster = _args[1]&gt;&gt;
+  &lt;&lt;set _checkCastingLevel = _args[2]&gt;&gt;
+  &lt;&lt;set _canCast = true&gt;&gt;
+
+  &lt;&lt;for _c = 0; _c &lt; _checkSpell.effects.length; _c++&gt;&gt;
+    &lt;&lt;set _eff = _checkSpell.effects[_c]&gt;&gt;
+    &lt;&lt;if _eff.target === &quot;caster&quot; &amp;&amp; _eff.value &lt; 0&gt;&gt;
+      &lt;&lt;if _eff.scaling === &quot;CastingLevel&quot;&gt;&gt;
+        &lt;&lt;set _realCost = Math.abs(_eff.value * _checkCastingLevel)&gt;&gt;
+      &lt;&lt;elseif _eff.scaling&gt;&gt;
+        &lt;&lt;set _realCost = Math.abs(_eff.value * _checkCaster[_eff.scaling])&gt;&gt;
+      &lt;&lt;else&gt;&gt;
+        &lt;&lt;set _realCost = Math.abs(_eff.value)&gt;&gt;
+      &lt;&lt;/if&gt;&gt;
+
+      &lt;&lt;if _eff.type === &quot;RemainMagicLevel&quot; &amp;&amp; _checkCaster.RemainMagicLevel &lt; _realCost&gt;&gt;
+        &lt;&lt;set _canCast = false&gt;&gt;
+      &lt;&lt;elseif _eff.type === &quot;RemainMP&quot; &amp;&amp; _checkCaster.RemainMP &lt; _realCost&gt;&gt;
+        &lt;&lt;set _canCast = false&gt;&gt;
+      &lt;&lt;elseif _eff.type === &quot;RemainHP&quot; &amp;&amp; _checkCaster.RemainHP &lt; _realCost&gt;&gt;
+        &lt;&lt;set _canCast = false&gt;&gt;
+      &lt;&lt;elseif _eff.type === &quot;RemainSpeedLevel&quot; &amp;&amp; _checkCaster.RemainSpeedLevel &lt; _realCost&gt;&gt;
+        &lt;&lt;set _canCast = false&gt;&gt;
+      &lt;&lt;/if&gt;&gt;
+    &lt;&lt;/if&gt;&gt;
+  &lt;&lt;/for&gt;&gt;
 &lt;&lt;/widget&gt;&gt;</tw-passagedata><tw-passagedata pid="16" name="Set Status" tags="widget nobr" position="725,225" size="100,100">/* 便捷设置带上限的新数值，只是下面setStat的组件，实际不使用 */
 &lt;&lt;widget &quot;capStat&quot;&gt;&gt;
     &lt;&lt;set _name = _args[0]&gt;&gt;
@@ -657,21 +725,275 @@ airp你就看去吧，我的眼里闪过决绝与犹豫，轻的，缓的，“�
 &lt;/div&gt;
 &lt;br&gt;
 &lt;&lt;link &quot;下一轮&quot;&gt;&gt;
+    &lt;&lt;set $CurrentRound += 1&gt;&gt;
     &lt;&lt;checkBattleEnd&gt;&gt;
-    &lt;&lt;replace &quot;#EnemyInfo&quot;&gt;&gt;
-        &lt;&lt;showEnemyInfo&gt;&gt;
-    &lt;&lt;/replace&gt;&gt;
-    &lt;&lt;replace &quot;#BattleRound&quot;&gt;&gt;
-        &lt;&lt;include &quot;Battle Round&quot;&gt;&gt;
-    &lt;&lt;/replace&gt;&gt;
+    &lt;&lt;if $Player.status === &quot;active&quot;&gt;&gt;
+        &lt;&lt;replace &quot;#EnemyInfo&quot;&gt;&gt;
+            &lt;&lt;showEnemyInfo&gt;&gt;
+        &lt;&lt;/replace&gt;&gt;
+        &lt;&lt;replace &quot;#BattleRound&quot;&gt;&gt;
+            &lt;&lt;include &quot;Battle Round&quot;&gt;&gt;
+        &lt;&lt;/replace&gt;&gt;
+    &lt;&lt;/if&gt;&gt;
 &lt;&lt;/link&gt;&gt;</tw-passagedata><tw-passagedata pid="19" name="Battle Round" tags="nobr" position="1100,225" size="100,100">当前版本还没写战斗流程。请点击下列链接决定战斗结果：
 &lt;&lt;link &quot;胜利&quot;&gt;&gt;
     &lt;&lt;goto $BattleWin&gt;&gt;
+    &lt;&lt;set $CurrentRound = 1&gt;&gt;
 &lt;&lt;/link&gt;&gt;
 
 &lt;&lt;link &quot;失败&quot;&gt;&gt;
-    &lt;&lt;goto BattleLose&gt;&gt;
-&lt;&lt;/link&gt;&gt;</tw-passagedata><tw-passagedata pid="20" name="Create Player Character-start" tags="" position="1225,225" size="100,100">&lt;span style=&quot;opacity: 0.5&quot;&gt;现在角色创建流程还不完善，暂时请选择默认开局。&lt;/span&gt;
+    &lt;&lt;goto $BattleLose&gt;&gt;
+    &lt;&lt;set $CurrentRound = 1&gt;&gt;
+&lt;&lt;/link&gt;&gt;
+
+现在是第$CurrentRound轮。
+
+/* 重置行动值 */
+&lt;&lt;for _set = 0; _set &lt; $Enemy.length; _set++&gt;&gt;
+  &lt;&lt;set $Enemy[_set].RemainMagicLevel = $Enemy[_set].MagicLevel&gt;&gt;
+  &lt;&lt;set $Enemy[_set].RemainSpeedLevel = $Enemy[_set].SpeedLevel&gt;&gt;
+&lt;&lt;/for&gt;&gt;
+&lt;&lt;set $Player.RemainMagicLevel = $Player.MagicLevel&gt;&gt;
+&lt;&lt;set $Player.RemainSpeedLevel = $Player.SpeedLevel&gt;&gt;
+
+/* 将行动推至 $Enemy[_i]的轮次 */
+&lt;&lt;for _i = 0; _i &lt; $EnemyCount; _i++&gt;&gt;
+
+    /* 施法逻辑开始 */
+    /* 用一个足够大的上限防止死循环，比如最多施法10次 */
+    &lt;&lt;set _castCount = 0&gt;&gt;
+    &lt;&lt;for ; _castCount &lt; 10; _castCount++&gt;&gt;
+
+        /* 检查是否还有所需施法资源 */
+        &lt;&lt;if $Enemy[_i].RemainMagicLevel &lt;= 0 || $Enemy[_i].RemainMP &lt;= 0 || $Enemy[_i].RemainHP &lt;= 0 || $Enemy[_i].RemainSpeedLevel &lt;= 0&gt;&gt;
+            &lt;&lt;break&gt;&gt;
+        &lt;&lt;/if&gt;&gt;
+
+        /* 在法术列表里找第一个本轮能释放的法术 */
+        /* 条件：施法者的 RemainMagicLevel 足够支付该法术的消耗 */
+        &lt;&lt;set _selectedSpell = &quot;&quot;&gt;&gt;
+        &lt;&lt;set _selectedTarget = null&gt;&gt;
+
+        /* --- 复活逻辑 --- */
+        &lt;&lt;if _selectedSpell === &quot;&quot;&gt;&gt;
+            &lt;&lt;set _hasDefeated = $Enemy.some(function(e){ return e.status === &quot;defeated&quot;; })&gt;&gt;
+            &lt;&lt;if _hasDefeated&gt;&gt;
+                &lt;&lt;for _k = 0; _k &lt; $Enemy[_i].spell.length; _k++&gt;&gt;
+                    &lt;&lt;set _spellData = $SpellLibrary[$Enemy[_i].spell[_k]]&gt;&gt;
+                    /* 先检查是否有复活效果 */
+                    &lt;&lt;set _hasReviveEffect = _spellData.effects.some(function(eff){
+                        return eff.type === &quot;status&quot; &amp;&amp; eff.value === &quot;active&quot;;
+                    })&gt;&gt;
+
+                    &lt;&lt;set _CastingLevel = 1&gt;&gt;
+
+                    /* 有复活效果再检查消耗是否负担得起 */
+                    &lt;&lt;if _hasReviveEffect &amp;&amp; _selectedSpell === &quot;&quot;&gt;&gt;
+                        &lt;&lt;canCastSpell _spellData $Enemy[_i] _CastingLevel&gt;&gt;
+                        &lt;&lt;if _canCast&gt;&gt;
+                            &lt;&lt;set _selectedSpell = $Enemy[_i].spell[_k]&gt;&gt;
+                            &lt;&lt;set _selectedTarget = $Enemy.find(function(e){ return e.status === &quot;defeated&quot;; })&gt;&gt;
+                        &lt;&lt;/if&gt;&gt;
+                    &lt;&lt;/if&gt;&gt;
+                &lt;&lt;/for&gt;&gt;
+            &lt;&lt;/if&gt;&gt;
+        &lt;&lt;/if&gt;&gt;
+        /* --- 治疗 --- */
+        &lt;&lt;if _selectedSpell === &quot;&quot;&gt;&gt;
+            &lt;&lt;set _inDangerZone = $Enemy.some(function(e){ return e.status === &quot;active&quot; &amp;&amp; e.RemainHP &lt; e.hp * 0.3; })&gt;&gt;/* 检查是否有血量低于30%的敌人,有则返回true */
+            &lt;&lt;if _inDangerZone&gt;&gt;/* 基于上一条检查结果,true则进入治疗释放逻辑 */
+                &lt;&lt;for _k = 0; _k &lt; $Enemy[_i].spell.length; _k++&gt;&gt;/* 遍历此轮次行动敌人的已掌握法术, k为第k条法术 */
+
+                    &lt;&lt;set _spellData = $SpellLibrary[$Enemy[_i].spell[_k]]&gt;&gt;/* 导入第k条法术的效果数据 */
+
+                    /* 检查第k条法术是否能提升剩余血量,且作用于施法对象,是则返回true */
+                    &lt;&lt;set _hasHealEffect = _spellData.effects.some(function(eff){
+                        return eff.type === &quot;RemainHP&quot; &amp;&amp; eff.value &gt; 0 &amp;&amp; eff.target === &quot;chosen&quot;;
+                    })&gt;&gt;
+
+                    /* 检查是否满足释放要求,如具有足够的剩余mp */
+                    &lt;&lt;if _hasHealEffect &amp;&amp; _selectedSpell === &quot;&quot;&gt;&gt;
+                        /* 确定释放等级 */
+                        /* 找到治疗效果条目，获取每级回复量 */
+                        &lt;&lt;set _healEntry = _spellData.effects.find(function(eff){
+                            return eff.type === &quot;RemainHP&quot; &amp;&amp; eff.value &gt; 0 &amp;&amp; eff.target === &quot;chosen&quot;;
+                        })&gt;&gt;
+
+                        /* 每1级CastingLevel回复的血量 */
+                        &lt;&lt;set _healPerLevel = _healEntry.value&gt;&gt;
+
+                        /* 目标需要回复的血量 = 80%最大血量 - 当前血量 */
+                        &lt;&lt;set _healTarget = $Enemy.find(function(e){ return e.status === &quot;active&quot; &amp;&amp; e.RemainHP &lt; e.hp * 0.3; })&gt;&gt;
+                        &lt;&lt;set _hpNeeded = _healTarget.hp * 0.8 - _healTarget.RemainHP&gt;&gt;
+
+                        /* 向上取整，算出最少需要多少级 */
+                        /* 如果已经高于80%（差值为负或0），至少释放1级 */
+                        &lt;&lt;if _hpNeeded &lt;= 0&gt;&gt;
+                            &lt;&lt;set _CastingLevel = 1&gt;&gt;
+                            &lt;&lt;else&gt;&gt;
+                                &lt;&lt;set _CastingLevel = Math.ceil(_hpNeeded / _healPerLevel)&gt;&gt;
+                        &lt;&lt;/if&gt;&gt;
+
+                        /* 不能超过施法者当前剩余的法术等级 */
+                        &lt;&lt;if _CastingLevel &gt; $Enemy[_i].RemainMagicLevel&gt;&gt;
+                            &lt;&lt;set _CastingLevel = $Enemy[_i].RemainMagicLevel&gt;&gt;
+                        &lt;&lt;/if&gt;&gt;
+
+                        &lt;&lt;canCastSpell _spellData $Enemy[_i] _CastingLevel&gt;&gt;
+                        &lt;&lt;if _canCast&gt;&gt;
+                            &lt;&lt;set _selectedSpell = $Enemy[_i].spell[_k]&gt;&gt;
+                            &lt;&lt;set _selectedTarget = _healTarget&gt;&gt;
+                        &lt;&lt;/if&gt;&gt;
+                    &lt;&lt;/if&gt;&gt;
+                &lt;&lt;/for&gt;&gt;
+            &lt;&lt;/if&gt;&gt;
+        &lt;&lt;/if&gt;&gt;
+        /* --- 伤害 --- */
+        &lt;&lt;if _selectedSpell === &quot;&quot;&gt;&gt;
+            &lt;&lt;if $Player.RemainHP &lt;= 0&gt;&gt;
+            &lt;&lt;else&gt;&gt;
+                &lt;&lt;for _k = 0; _k &lt; $Enemy[_i].spell.length; _k++&gt;&gt;/* 遍历此轮次行动敌人的已掌握法术, k为第k条法术 */
+
+                    &lt;&lt;set _spellData = $SpellLibrary[$Enemy[_i].spell[_k]]&gt;&gt;/* 导入第k条法术的效果数据 */
+
+                    /* 检查第k条法术是否能降低剩余血量,且作用于施法对象,是则返回true */
+                    &lt;&lt;set _hasDamageEffect = _spellData.effects.some(function(eff){
+                        return eff.type === &quot;RemainHP&quot; &amp;&amp; eff.value &lt; 0 &amp;&amp; eff.target === &quot;chosen&quot;;
+                    })&gt;&gt;
+
+                    &lt;&lt;if _hasDamageEffect &amp;&amp; _selectedSpell === &quot;&quot;&gt;&gt;
+                        /* 找到伤害效果条目，获取每级伤害量 */
+                        &lt;&lt;set _dmgEntry = _spellData.effects.find(function(eff){
+                            return eff.type === &quot;RemainHP&quot; &amp;&amp; eff.value &lt; 0 &amp;&amp; eff.target === &quot;chosen&quot;;
+                        })&gt;&gt;
+
+                        /* 每1级CastingLevel造成的伤害(负数) */
+                        &lt;&lt;set _dmgPerLevel = _dmgEntry.value&gt;&gt;
+
+                        /* 找到MP消耗条目，获取每级MP消耗(负数) */
+                        &lt;&lt;set _mpCostEntry = _spellData.effects.find(function(eff){
+                            return eff.type === &quot;RemainMP&quot; &amp;&amp; eff.target === &quot;caster&quot;;
+                        })&gt;&gt;
+
+                        /* 找到MagicLevel消耗条目 */
+                        &lt;&lt;set _mlCostEntry = _spellData.effects.find(function(eff){
+                            return eff.type === &quot;RemainMagicLevel&quot; &amp;&amp; eff.target === &quot;caster&quot;;
+                        })&gt;&gt;
+
+                        /* ===== 优先检查：能否一击终结玩家 ===== */
+                        /* 一击终结所需等级 = 向上取整(玩家当前血量 / 每级伤害的绝对值) */
+                        &lt;&lt;set _killLevel = Math.ceil($Player.RemainHP / Math.abs(_dmgPerLevel))&gt;&gt;
+
+                        /* 限制不超过施法者剩余法术等级 */
+                        &lt;&lt;if _killLevel &gt; $Enemy[_i].RemainMagicLevel&gt;&gt;
+                            &lt;&lt;set _killLevel = $Enemy[_i].RemainMagicLevel&gt;&gt;
+                        &lt;&lt;/if&gt;&gt;
+
+                        /* 检查该等级能否释放 */
+                        &lt;&lt;canCastSpell _spellData $Enemy[_i] _killLevel&gt;&gt;
+
+                        /* 如果能释放，且确实能打死玩家 */
+                        &lt;&lt;if _canCast &amp;&amp; Math.abs(_dmgPerLevel) * _killLevel &gt;= $Player.RemainHP&gt;&gt;
+                            &lt;&lt;set _CastingLevel = _killLevel&gt;&gt;
+                            &lt;&lt;set _selectedSpell = $Enemy[_i].spell[_k]&gt;&gt;
+                            &lt;&lt;set _selectedTarget = $Player&gt;&gt;
+
+                        &lt;&lt;else&gt;&gt;
+                            /* ===== 非终结：计算保守释放等级 ===== */
+
+                            /* 确定保留mp比例n */
+                            &lt;&lt;if $CurrentRound &lt;= 3&gt;&gt;
+                                &lt;&lt;set _n = 5&gt;&gt;
+                            &lt;&lt;else&gt;&gt;
+                                &lt;&lt;set _n = 1 - $CurrentRound * 0.15&gt;&gt;
+                                /* 最低为0，不保留MP但也不透支 */
+                                &lt;&lt;if _n &lt; 0&gt;&gt;
+                                    &lt;&lt;set _n = 0&gt;&gt;
+                                &lt;&lt;/if&gt;&gt;
+                            &lt;&lt;/if&gt;&gt;
+
+                            /* 施法者需要保留的最低mp */
+                            &lt;&lt;set _reserveMP = $Enemy[_i].mp * _n * 0.1&gt;&gt;
+
+                            /* 计算释放法术后施法者还能剩多少MP来反推最大可承受等级 */
+                            /* 先看法术对施法者有没有MP消耗 */
+                            &lt;&lt;set _selfMPCostEntry = _spellData.effects.find(function(eff){
+                                return eff.type === &quot;RemainMP&quot; &amp;&amp; eff.target === &quot;caster&quot;;
+                            })&gt;&gt;
+
+                            /* 施法者当前可用于消耗的MP余量 */
+                            &lt;&lt;set _mpBudget = $Enemy[_i].RemainMP - _reserveMP&gt;&gt;
+
+                            /* 如果保留后的余量已经不足，不释放 */
+                            &lt;&lt;if _mpBudget &lt;= 0&gt;&gt;
+                                /* 跳过此法术，什么都不做 */
+
+                            &lt;&lt;else&gt;&gt;
+                                /* 在保留n*10% MP的前提下，计算最大释放等级 */
+                                /* 从施法者剩余法术等级开始，作为上限 */
+                                &lt;&lt;set _maxLevel = $Enemy[_i].RemainMagicLevel&gt;&gt;
+
+                                /* 如果法术对施法者有MP消耗，限制等级 */
+                                &lt;&lt;if _selfMPCostEntry&gt;&gt;
+                                    &lt;&lt;set _mpMaxLevel = Math.floor(_mpBudget / Math.abs(_selfMPCostEntry.value))&gt;&gt;
+                                    &lt;&lt;if _mpMaxLevel &lt; _maxLevel&gt;&gt;
+                                        &lt;&lt;set _maxLevel = _mpMaxLevel&gt;&gt;
+                                    &lt;&lt;/if&gt;&gt;
+                                &lt;&lt;/if&gt;&gt;
+
+                                /* 至少1级 */
+                                &lt;&lt;if _maxLevel &lt; 1&gt;&gt;
+                                    &lt;&lt;set _maxLevel = 1&gt;&gt;
+                                &lt;&lt;/if&gt;&gt;
+
+                                &lt;&lt;set _CastingLevel = _maxLevel&gt;&gt;
+                                /* 不需要超过打死玩家所需的等级 */
+                                &lt;&lt;set _killNeed = Math.ceil($Player.RemainHP / Math.abs(_dmgPerLevel))&gt;&gt;
+                                &lt;&lt;if _CastingLevel &gt; _killNeed&gt;&gt;
+                                    &lt;&lt;set _CastingLevel = _killNeed&gt;&gt;
+                                &lt;&lt;/if&gt;&gt;
+
+                                /* 检查能否释放 */
+                                &lt;&lt;canCastSpell _spellData $Enemy[_i] _CastingLevel&gt;&gt;
+                                &lt;&lt;if _canCast&gt;&gt;
+                                    /* 释放后施法者剩余MP检查 */
+                                    &lt;&lt;if _selfMPCostEntry&gt;&gt;
+                                        &lt;&lt;set _afterMP = $Enemy[_i].RemainMP + _selfMPCostEntry.value * _CastingLevel&gt;&gt;
+                                    &lt;&lt;else&gt;&gt;
+                                        &lt;&lt;set _afterMP = $Enemy[_i].RemainMP&gt;&gt;
+                                    &lt;&lt;/if&gt;&gt;
+
+                                    &lt;&lt;if _afterMP &gt;= _reserveMP&gt;&gt;
+                                        &lt;&lt;set _selectedSpell = $Enemy[_i].spell[_k]&gt;&gt;
+                                        &lt;&lt;set _selectedTarget = $Player&gt;&gt;
+                                    &lt;&lt;/if&gt;&gt;
+                                &lt;&lt;/if&gt;&gt;
+                            &lt;&lt;/if&gt;&gt;
+                        &lt;&lt;/if&gt;&gt;
+                    &lt;&lt;/if&gt;&gt;
+                &lt;&lt;/for&gt;&gt;
+            &lt;&lt;/if&gt;&gt;
+        &lt;&lt;/if&gt;&gt;
+
+        /* --- 后续可以继续加其他优先级的法术判断，结构相同 --- */
+        /* 如果没找到任何可以释放的法术，终止循环 */
+        &lt;&lt;if _selectedSpell === &quot;&quot; || _selectedTarget === null&gt;&gt;
+            &lt;&lt;break&gt;&gt;
+        &lt;&lt;/if&gt;&gt;
+
+        /* 释放法术 */
+        &lt;&lt;castSpell _selectedSpell _selectedTarget $Enemy[_i] _CastingLevel&gt;&gt;
+
+    &lt;&lt;/for&gt;&gt;/* 施法逻辑结束 */
+
+    /* 检测玩家是否在此敌人行动中死亡 */
+    &lt;&lt;if $Player.RemainHP &lt;= 0&gt;&gt;
+        &lt;&lt;set $Player.status = &quot;defeated&quot;&gt;&gt;
+        &lt;&lt;set $Player.RemainHP = 1&gt;&gt;
+        &lt;&lt;break&gt;&gt;
+    &lt;&lt;/if&gt;&gt;
+
+&lt;&lt;/for&gt;&gt;/* Enemy[_i]的行动轮次结束 */</tw-passagedata><tw-passagedata pid="20" name="Create Player Character-start" tags="" position="1225,225" size="100,100">&lt;span style=&quot;opacity: 0.5&quot;&gt;现在角色创建流程还不完善，暂时请选择默认开局。&lt;/span&gt;
 
 &lt;&lt;link &quot;作为流浪儿开局&quot;&gt;&gt;
     &lt;&lt;goto &quot;Create Player Character-name&quot;&gt;&gt;
@@ -796,7 +1118,12 @@ airp你就看去吧，我的眼里闪过决绝与犹豫，轻的，缓的，“�
         ShownMP:&quot;不到一百&quot;,
         RemainMP:80000,
         ShownLV:&quot;也就十几&quot;,
-        spell:[],
+        spell:[
+            &quot;damage&quot;,
+            &quot;freeze&quot;,
+            &quot;revive&quot;,
+            &quot;heal&quot;
+        ],
         MagicLevel:500,
         RemainMagicLevel:500,
         SpeedLevel:10,
@@ -817,6 +1144,7 @@ airp你就看去吧，我的眼里闪过决绝与犹豫，轻的，缓的，“�
 
 
 &lt;&lt;nobr&gt;&gt;
+&lt;&lt;set $Enemy = []&gt;&gt;
 &lt;&lt;if $AllowNSFW === true&gt;&gt;
     &lt;&lt;link &quot;侵犯&quot;&gt;&gt;
         &lt;&lt;set $EdwinLove += -100&gt;&gt;
@@ -845,7 +1173,7 @@ airp你就看去吧，我的眼里闪过决绝与犹豫，轻的，缓的，“�
     &lt;&lt;run $EdwinSpecialAttitude.push(&quot;caution&quot;)&gt;&gt;
     &lt;&lt;goto &quot;&quot;&gt;&gt;
 &lt;&lt;/link&gt;&gt;
-&lt;&lt;/nobr&gt;&gt;</tw-passagedata><tw-passagedata pid="31" name="Bard Edwin First Meet-nsfw" tags="" position="100,475" size="100,100">“什么——不、等等，求你了！”意识到你的意图后他惊慌地试图推开你，尽管成效甚微。显然他相当依赖法术，他的力气相较于他的魔法水平弱得惊人。
+&lt;&lt;/nobr&gt;&gt;</tw-passagedata><tw-passagedata pid="31" name="Bard Edwin First Meet-Central Park-nsfw" tags="" position="100,475" size="100,100">“什么——不、等等，求你了！”意识到你的意图后他惊慌地试图推开你，尽管成效甚微。显然他相当依赖法术，他的力气相较于他的魔法水平弱得惊人。
 
 他试图求助，但四周本就不多的行人在见证过你们的战斗后全都不敢上前。
 
@@ -858,7 +1186,7 @@ airp你就看去吧，我的眼里闪过决绝与犹豫，轻的，缓的，“�
 &lt;&lt;link &quot;就地开始&quot;&gt;&gt;
     &lt;&lt;set $nsfwEnd = &quot;Bard Edwin First Meet-Central Park-nsfw-noticed&quot;&gt;&gt;
     &lt;&lt;goto &quot;Bard Edwin First Meet-Central Park-nsfw-noticed-scene&quot;&gt;&gt;
-&lt;&lt;/link&gt;&gt;</tw-passagedata><tw-passagedata pid="32" name="Bard Edwin First Meet-Central Park-nsfw-hide-scene" tags="" position="225,475" size="100,100">&lt;&lt;include &quot;NSFW-Non consensual-Dominant&quot;&gt;&gt;</tw-passagedata><tw-passagedata pid="33" name="Bard Edwin First Meet-Central Park-nsfw-hide" tags="" position="350,475" size="100,100"></tw-passagedata><tw-passagedata pid="34" name="Bard Edwin First Meet-Central Park-nsfw-noticed-scene" tags="" position="475,475" size="100,100">&lt;&lt;include &quot;NSFW-Non consensual-Dominant&quot;&gt;&gt;</tw-passagedata><tw-passagedata pid="35" name="Bard Edwin First Meet-Central Park-nsfw-noticed" tags="" position="600,475" size="100,100"></tw-passagedata><tw-passagedata pid="36" name="Bard Edwin First Meet-Central Park-talking rude stop lose" tags="" position="725,475" size="100,100">你输了。
+&lt;&lt;/link&gt;&gt;</tw-passagedata><tw-passagedata pid="32" name="Bard Edwin First Meet-Central Park-nsfw-hide-scene" tags="" position="225,475" size="100,100">&lt;&lt;include &quot;NSFW-Non consensual-Dominant&quot;&gt;&gt;</tw-passagedata><tw-passagedata pid="33" name="Bard Edwin First Meet-Central Park-nsfw-hide" tags="" position="350,475" size="100,100"></tw-passagedata><tw-passagedata pid="34" name="Bard Edwin First Meet-Central Park-nsfw-noticed-scene" tags="" position="475,475" size="100,100">&lt;&lt;include &quot;NSFW-Non consensual-Dominant&quot;&gt;&gt;</tw-passagedata><tw-passagedata pid="35" name="Bard Edwin First Meet-Central Park-nsfw-noticed" tags="" position="600,475" size="100,100"></tw-passagedata><tw-passagedata pid="36" name="Bard Edwin First Meet-Central Park-talking rude stop lose" tags="" position="725,475" size="100,100">你输了。&lt;&lt;set $Enemy = []&gt;&gt;
 
 他站在不远处看着你，将佩剑收回了腰间。“你还是回去吧？”他说。
 

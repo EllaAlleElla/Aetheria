@@ -58,5 +58,22 @@
             value:-100,
             scaling:null}
         ]
+    },
+    heal:{
+        name:"治愈术",
+        effects:[
+            {type:"RemainHP",
+            target:"chosen",
+            value:+5,
+            scaling:"CastingLevel"},
+            {type:"RemainMagicLevel",
+            target:"caster",
+            value:-5,
+            scaling:null},
+            {type:"RemainMP",
+            target:"caster",
+            value:-5,
+            scaling:"CastingLevel"}
+        ]
     }
 }>>

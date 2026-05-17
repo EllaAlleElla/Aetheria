@@ -8,22 +8,277 @@
 </div>
 <br>
 <<link "下一轮">>
+    <<set $CurrentRound += 1>>
     <<checkBattleEnd>>
-    <<replace "#EnemyInfo">>
-        <<showEnemyInfo>>
-    <</replace>>
-    <<replace "#BattleRound">>
-        <<include "Battle Round">>
-    <</replace>>
+    <<if $Player.status === "active">>
+        <<replace "#EnemyInfo">>
+            <<showEnemyInfo>>
+        <</replace>>
+        <<replace "#BattleRound">>
+            <<include "Battle Round">>
+        <</replace>>
+    <</if>>
 <</link>>
+
 
 :: Battle Round [nobr]
 
 当前版本还没写战斗流程。请点击下列链接决定战斗结果：
 <<link "胜利">>
     <<goto $BattleWin>>
+    <<set $CurrentRound = 1>>
 <</link>>
 
 <<link "失败">>
-    <<goto BattleLose>>
+    <<goto $BattleLose>>
+    <<set $CurrentRound = 1>>
 <</link>>
+
+现在是第$CurrentRound轮。
+
+/* 重置行动值 */
+<<for _set = 0; _set < $Enemy.length; _set++>>
+  <<set $Enemy[_set].RemainMagicLevel = $Enemy[_set].MagicLevel>>
+  <<set $Enemy[_set].RemainSpeedLevel = $Enemy[_set].SpeedLevel>>
+<</for>>
+<<set $Player.RemainMagicLevel = $Player.MagicLevel>>
+<<set $Player.RemainSpeedLevel = $Player.SpeedLevel>>
+
+/* 将行动推至 $Enemy[_i]的轮次 */
+<<for _i = 0; _i < $EnemyCount; _i++>>
+
+    /* 施法逻辑开始 */
+    /* 用一个足够大的上限防止死循环，比如最多施法10次 */
+    <<set _castCount = 0>>
+    <<for ; _castCount < 10; _castCount++>>
+
+        /* 检查是否还有所需施法资源 */
+        <<if $Enemy[_i].RemainMagicLevel <= 0 || $Enemy[_i].RemainMP <= 0 || $Enemy[_i].RemainHP <= 0 || $Enemy[_i].RemainSpeedLevel <= 0>>
+            <<break>>
+        <</if>>
+
+        /* 在法术列表里找第一个本轮能释放的法术 */
+        /* 条件：施法者的 RemainMagicLevel 足够支付该法术的消耗 */
+        <<set _selectedSpell = "">>
+        <<set _selectedTarget = null>>
+
+        /* --- 复活逻辑 --- */
+        <<if _selectedSpell === "">>
+            <<set _hasDefeated = $Enemy.some(function(e){ return e.status === "defeated"; })>>
+            <<if _hasDefeated>>
+                <<for _k = 0; _k < $Enemy[_i].spell.length; _k++>>
+                    <<set _spellData = $SpellLibrary[$Enemy[_i].spell[_k]]>>
+                    /* 先检查是否有复活效果 */
+                    <<set _hasReviveEffect = _spellData.effects.some(function(eff){
+                        return eff.type === "status" && eff.value === "active";
+                    })>>
+
+                    <<set _CastingLevel = 1>>
+
+                    /* 有复活效果再检查消耗是否负担得起 */
+                    <<if _hasReviveEffect && _selectedSpell === "">>
+                        <<canCastSpell _spellData $Enemy[_i] _CastingLevel>>
+                        <<if _canCast>>
+                            <<set _selectedSpell = $Enemy[_i].spell[_k]>>
+                            <<set _selectedTarget = $Enemy.find(function(e){ return e.status === "defeated"; })>>
+                        <</if>>
+                    <</if>>
+                <</for>>
+            <</if>>
+        <</if>>
+        /* --- 治疗 --- */
+        <<if _selectedSpell === "">>
+            <<set _inDangerZone = $Enemy.some(function(e){ return e.status === "active" && e.RemainHP < e.hp * 0.3; })>>/* 检查是否有血量低于30%的敌人,有则返回true */
+            <<if _inDangerZone>>/* 基于上一条检查结果,true则进入治疗释放逻辑 */
+                <<for _k = 0; _k < $Enemy[_i].spell.length; _k++>>/* 遍历此轮次行动敌人的已掌握法术, k为第k条法术 */
+
+                    <<set _spellData = $SpellLibrary[$Enemy[_i].spell[_k]]>>/* 导入第k条法术的效果数据 */
+
+                    /* 检查第k条法术是否能提升剩余血量,且作用于施法对象,是则返回true */
+                    <<set _hasHealEffect = _spellData.effects.some(function(eff){
+                        return eff.type === "RemainHP" && eff.value > 0 && eff.target === "chosen";
+                    })>>
+
+                    /* 检查是否满足释放要求,如具有足够的剩余mp */
+                    <<if _hasHealEffect && _selectedSpell === "">>
+                        /* 确定释放等级 */
+                        /* 找到治疗效果条目，获取每级回复量 */
+                        <<set _healEntry = _spellData.effects.find(function(eff){
+                            return eff.type === "RemainHP" && eff.value > 0 && eff.target === "chosen";
+                        })>>
+
+                        /* 每1级CastingLevel回复的血量 */
+                        <<set _healPerLevel = _healEntry.value>>
+
+                        /* 目标需要回复的血量 = 80%最大血量 - 当前血量 */
+                        <<set _healTarget = $Enemy.find(function(e){ return e.status === "active" && e.RemainHP < e.hp * 0.3; })>>
+                        <<set _hpNeeded = _healTarget.hp * 0.8 - _healTarget.RemainHP>>
+
+                        /* 向上取整，算出最少需要多少级 */
+                        /* 如果已经高于80%（差值为负或0），至少释放1级 */
+                        <<if _hpNeeded <= 0>>
+                            <<set _CastingLevel = 1>>
+                            <<else>>
+                                <<set _CastingLevel = Math.ceil(_hpNeeded / _healPerLevel)>>
+                        <</if>>
+
+                        /* 不能超过施法者当前剩余的法术等级 */
+                        <<if _CastingLevel > $Enemy[_i].RemainMagicLevel>>
+                            <<set _CastingLevel = $Enemy[_i].RemainMagicLevel>>
+                        <</if>>
+
+                        <<canCastSpell _spellData $Enemy[_i] _CastingLevel>>
+                        <<if _canCast>>
+                            <<set _selectedSpell = $Enemy[_i].spell[_k]>>
+                            <<set _selectedTarget = _healTarget>>
+                        <</if>>
+                    <</if>>
+                <</for>>
+            <</if>>
+        <</if>>
+        /* --- 伤害 --- */
+        <<if _selectedSpell === "">>
+            <<if $Player.RemainHP <= 0>>
+            <<else>>
+                <<for _k = 0; _k < $Enemy[_i].spell.length; _k++>>/* 遍历此轮次行动敌人的已掌握法术, k为第k条法术 */
+
+                    <<set _spellData = $SpellLibrary[$Enemy[_i].spell[_k]]>>/* 导入第k条法术的效果数据 */
+
+                    /* 检查第k条法术是否能降低剩余血量,且作用于施法对象,是则返回true */
+                    <<set _hasDamageEffect = _spellData.effects.some(function(eff){
+                        return eff.type === "RemainHP" && eff.value < 0 && eff.target === "chosen";
+                    })>>
+
+                    <<if _hasDamageEffect && _selectedSpell === "">>
+                        /* 找到伤害效果条目，获取每级伤害量 */
+                        <<set _dmgEntry = _spellData.effects.find(function(eff){
+                            return eff.type === "RemainHP" && eff.value < 0 && eff.target === "chosen";
+                        })>>
+
+                        /* 每1级CastingLevel造成的伤害(负数) */
+                        <<set _dmgPerLevel = _dmgEntry.value>>
+
+                        /* 找到MP消耗条目，获取每级MP消耗(负数) */
+                        <<set _mpCostEntry = _spellData.effects.find(function(eff){
+                            return eff.type === "RemainMP" && eff.target === "caster";
+                        })>>
+
+                        /* 找到MagicLevel消耗条目 */
+                        <<set _mlCostEntry = _spellData.effects.find(function(eff){
+                            return eff.type === "RemainMagicLevel" && eff.target === "caster";
+                        })>>
+
+                        /* ===== 优先检查：能否一击终结玩家 ===== */
+                        /* 一击终结所需等级 = 向上取整(玩家当前血量 / 每级伤害的绝对值) */
+                        <<set _killLevel = Math.ceil($Player.RemainHP / Math.abs(_dmgPerLevel))>>
+
+                        /* 限制不超过施法者剩余法术等级 */
+                        <<if _killLevel > $Enemy[_i].RemainMagicLevel>>
+                            <<set _killLevel = $Enemy[_i].RemainMagicLevel>>
+                        <</if>>
+
+                        /* 检查该等级能否释放 */
+                        <<canCastSpell _spellData $Enemy[_i] _killLevel>>
+
+                        /* 如果能释放，且确实能打死玩家 */
+                        <<if _canCast && Math.abs(_dmgPerLevel) * _killLevel >= $Player.RemainHP>>
+                            <<set _CastingLevel = _killLevel>>
+                            <<set _selectedSpell = $Enemy[_i].spell[_k]>>
+                            <<set _selectedTarget = $Player>>
+
+                        <<else>>
+                            /* ===== 非终结：计算保守释放等级 ===== */
+
+                            /* 确定保留mp比例n */
+                            <<if $CurrentRound <= 3>>
+                                <<set _n = 5>>
+                            <<else>>
+                                <<set _n = 1 - $CurrentRound * 0.15>>
+                                /* 最低为0，不保留MP但也不透支 */
+                                <<if _n < 0>>
+                                    <<set _n = 0>>
+                                <</if>>
+                            <</if>>
+
+                            /* 施法者需要保留的最低mp */
+                            <<set _reserveMP = $Enemy[_i].mp * _n * 0.1>>
+
+                            /* 计算释放法术后施法者还能剩多少MP来反推最大可承受等级 */
+                            /* 先看法术对施法者有没有MP消耗 */
+                            <<set _selfMPCostEntry = _spellData.effects.find(function(eff){
+                                return eff.type === "RemainMP" && eff.target === "caster";
+                            })>>
+
+                            /* 施法者当前可用于消耗的MP余量 */
+                            <<set _mpBudget = $Enemy[_i].RemainMP - _reserveMP>>
+
+                            /* 如果保留后的余量已经不足，不释放 */
+                            <<if _mpBudget <= 0>>
+                                /* 跳过此法术，什么都不做 */
+
+                            <<else>>
+                                /* 在保留n*10% MP的前提下，计算最大释放等级 */
+                                /* 从施法者剩余法术等级开始，作为上限 */
+                                <<set _maxLevel = $Enemy[_i].RemainMagicLevel>>
+
+                                /* 如果法术对施法者有MP消耗，限制等级 */
+                                <<if _selfMPCostEntry>>
+                                    <<set _mpMaxLevel = Math.floor(_mpBudget / Math.abs(_selfMPCostEntry.value))>>
+                                    <<if _mpMaxLevel < _maxLevel>>
+                                        <<set _maxLevel = _mpMaxLevel>>
+                                    <</if>>
+                                <</if>>
+
+                                /* 至少1级 */
+                                <<if _maxLevel < 1>>
+                                    <<set _maxLevel = 1>>
+                                <</if>>
+
+                                <<set _CastingLevel = _maxLevel>>
+                                /* 不需要超过打死玩家所需的等级 */
+                                <<set _killNeed = Math.ceil($Player.RemainHP / Math.abs(_dmgPerLevel))>>
+                                <<if _CastingLevel > _killNeed>>
+                                    <<set _CastingLevel = _killNeed>>
+                                <</if>>
+
+                                /* 检查能否释放 */
+                                <<canCastSpell _spellData $Enemy[_i] _CastingLevel>>
+                                <<if _canCast>>
+                                    /* 释放后施法者剩余MP检查 */
+                                    <<if _selfMPCostEntry>>
+                                        <<set _afterMP = $Enemy[_i].RemainMP + _selfMPCostEntry.value * _CastingLevel>>
+                                    <<else>>
+                                        <<set _afterMP = $Enemy[_i].RemainMP>>
+                                    <</if>>
+
+                                    <<if _afterMP >= _reserveMP>>
+                                        <<set _selectedSpell = $Enemy[_i].spell[_k]>>
+                                        <<set _selectedTarget = $Player>>
+                                    <</if>>
+                                <</if>>
+                            <</if>>
+                        <</if>>
+                    <</if>>
+                <</for>>
+            <</if>>
+        <</if>>
+
+        /* --- 后续可以继续加其他优先级的法术判断，结构相同 --- */
+        /* 如果没找到任何可以释放的法术，终止循环 */
+        <<if _selectedSpell === "" || _selectedTarget === null>>
+            <<break>>
+        <</if>>
+
+        /* 释放法术 */
+        <<castSpell _selectedSpell _selectedTarget $Enemy[_i] _CastingLevel>>
+
+    <</for>>/* 施法逻辑结束 */
+
+    /* 检测玩家是否在此敌人行动中死亡 */
+    <<if $Player.RemainHP <= 0>>
+        <<set $Player.status = "defeated">>
+        <<set $Player.RemainHP = 1>>
+        <<break>>
+    <</if>>
+
+<</for>>/* Enemy[_i]的行动轮次结束 */
