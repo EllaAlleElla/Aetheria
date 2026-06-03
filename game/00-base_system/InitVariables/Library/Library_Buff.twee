@@ -1,0 +1,77 @@
+:: Library-Buff
+<<set $BuffLibrary = {
+    frozen: {
+        name:"冰冻", tags:["debuff","ice"], category:"other", stackRule:"refresh",
+        apply:["snapshot"],
+        effects:[
+            { stat:"SpeedLevel", value:-5, scaling:"stack" },
+            { stat:"MagicLevel", value:-5, scaling:"stack" }
+        ],
+        perRound:[], flags:[], removeBy:["fire","heal"], durationType:"selfTurns"
+    },
+
+    blessed: {
+        name:"祝福", tags:["buff"], category:"survival", stackRule:"refresh",
+        apply:["snapshot"],
+        effects:[
+            { stat:"maxHP", value:20, scaling:"stack" },
+            { stat:"atk", value:2, scaling:"stack" }
+        ],
+        perRound:[], flags:[], removeBy:[], durationType:"selfTurns"
+    },
+
+    poisoned: {
+        name:"中毒", tags:["debuff","poison"], category:"other", stackRule:"stack",
+        apply:[], effects:[],
+        perRound:[ { value:-10, damageType:"true", element:"none", scaling:"stack" } ],
+        flags:[], removeBy:["cleanse"], durationType:"selfTurns"
+    },
+
+    lavaBurn: {
+        name:"灼烧(岩浆)", tags:["debuff","fire"], category:"other", stackRule:"refresh",
+        apply:[], effects:[],
+        perRound:[ { value:-15, damageType:"magical", element:"fire", scaling:null } ],
+        flags:[], removeBy:[], durationType:"selfTurns"
+    },
+
+    /* === 法阵：神圣防护相关 === */
+    physShield: {
+        name:"神圣护盾", tags:["buff"], category:"survival", stackRule:"refresh",
+        apply:[], effects:[], perRound:[], flags:[], removeBy:[], durationType:"selfTurns"
+    },
+    divPhysReduce: {
+        name:"神圣物理防护", tags:["buff"], category:"survival", stackRule:"refresh",
+        apply:["snapshot"], effects:[ { stat:"res.physical", value:10, scaling:"stack" } ],
+        perRound:[], flags:[], removeBy:[], durationType:"selfTurns"
+    },
+    divMagicReduce: {
+        name:"神圣魔法防护", tags:["buff"], category:"survival", stackRule:"refresh",
+        apply:["snapshot"], effects:[ { stat:"res.magical", value:4, scaling:"stack" } ],
+        perRound:[], flags:[], removeBy:[], durationType:"selfTurns"
+    },
+    /* 重力(追踪封印阵)：增加移动和行动的SpeedLevel消耗 */
+    gravityBind: {
+        name:"重压", tags:["debuff","gravity"], category:"other", stackRule:"refresh",
+        apply:["snapshot"],
+        effects:[
+            { stat:"moveCostAdd", value:5, scaling:"stack" },
+            { stat:"actCostAdd", value:5, scaling:"stack" }
+        ],
+        perRound:[], flags:[], removeBy:[], durationType:"selfTurns"
+    },
+        frozenSolid: {
+        name:"冻结", tags:["debuff","ice"], category:"other", stackRule:"refresh",
+        apply:[], effects:[],
+        perRound:[], flags:["cannotAct"], removeBy:["fire"], durationType:"selfTurns"
+    },
+        guarding: {
+        name:"格挡架势", tags:["buff"], category:"survival", stackRule:"refresh",
+        apply:["snapshot"],
+        effects:[
+            { stat:"res.physical", value:20, scaling:null },
+            { stat:"res.magical", value:20, scaling:null }
+        ],
+        perRound:[], flags:[], removeBy:[], durationType:"selfTurns",
+        counter: 0.3          /* 被攻击时反弹攻击者30%所受伤害 */
+    },
+}>>

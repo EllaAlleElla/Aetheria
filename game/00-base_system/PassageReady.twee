@@ -2,8 +2,16 @@
 
 <<set $Player.name = $PlayerName>>
 
-<<if $Enemy !== []>>
-    <<set $EnemyCount = $Enemy.length>>
+<<if $Player>>
+  <<checkLevelUp $Player>>
 <</if>>
 
+<<set _npcKeys = Object.keys($PersistNPC)>>
+<<for _pr = 0; _pr < _npcKeys.length; _pr++>>
+  <<checkLevelUp $PersistNPC[_npcKeys[_pr]]>>
+<</for>>
+
+
 <<timeWidget>>
+
+<<if not tags().includes('noreturn')>><<set $return to passage()>><</if>>

@@ -1,6 +1,6 @@
 :: Special NPC-Edwin
 /*设置*/
-<<set $EdwinMode = "HiddenBard">>/* 艾德温为哪种背景 */
+<<set $EdwinMode = "HiddenLord">>/* 艾德温为哪种背景 */
 
 /*数据*/
 <<set $EdwinLove = 0>>/* 艾德温好感 */
@@ -11,3 +11,29 @@
 
 <<set $PlayerHaveMetEdwin = false>>/* 玩家是否见过艾德温 */
 <<set $PlayerKnowEdwinName = false>>/* 玩家是否知道艾德温的名字 */
+
+
+/*数值*/
+<<set $PersistNPC.Edwin = {
+    originId: "Edwin",
+    name: "艾德温",
+    category: "elemental",
+    traits: ["fly"],
+    species: "",
+    special: ["demonkind"],
+    level: 71,
+    exp: 115,
+    growth: { maxMP: 0.6, initiative: 0.05, maxHP: 0.1, MagicLevel: 0.25 },
+    maxHP: 400, RemainHP: 400,
+    maxMP: 20000, RemainMP: 20000,
+    MagicLevel: 100, SpeedLevel: 100,
+    atk: 10,
+    initiative: 100,
+    res: { physical:0, magical:20, fire:0, ice:0, divine:-70 },
+    spell: [],
+    formation: [],
+    items: [],
+    skill: [],
+    weapon: null,
+    status: "alive"
+}>>

@@ -1,1 +1,149 @@
 :: Library-Formation
+<<set $FormationLibrary = {
+    DivineProtection: {
+        name: "神圣防护",
+        cost: [
+            { res:"RemainMagicLevel", value:10, scaling:"CastingLevel" },
+            { res:"RemainMP", value:80, scaling:"CastingLevel" }
+        ],
+
+        initiativeFactor: 0.8,        /* 法阵速度 = 施阵者initiative × 此系数 */
+        upkeepPerLevel: 80,           /* 预付池 = upkeepPerLevel × CastingLevel = 80×lv */
+        upkeepDrainPerTick: 1,        /* 每tick消耗预付池1点 */
+        maxTurns: null,               /* 不限行动次数（靠预付池耗尽消散） */
+        requireCaster: false,         /* 施阵者倒下也不消散 */
+
+        /* 成形时立即效果（对己方全体） */
+        onForm: [
+            { kind:"buff", target:"allySide", buffId:"physShield", duration:9999, valuePerLevel:10, linked:true },
+            { kind:"buff", target:"allySide", buffId:"divPhysReduce", duration:9999, linked:true },
+            { kind:"buff", target:"allySide", buffId:"divMagicReduce", duration:9999, linked:true },
+            { kind:"shield", target:"allySide", valuePerLevel:10, capPerLevel:20 }
+        ],
+
+        /* 每次行动效果（补护盾到上限） */
+        onTurn: [
+            { kind:"shield", target:"allySide", valuePerLevel:10, capPerLevel:20 }
+        ]
+    },
+
+    /* 追踪封印·重压：对敌方全体持续施加重压(增加行动消耗) */
+    GravityBind: {
+        name: "重压封印阵",
+        cost: [
+            { res:"RemainMagicLevel", value:50, scaling:"CastingLevel" },
+            { res:"RemainMP", value:60, scaling:"CastingLevel" }
+        ],
+        initiativeFactor: 0.8,
+        upkeepPerLevel: 60,
+        upkeepDrainPerTick: 1,
+        maxTurns: null,
+        requireCaster: false,
+        onForm: [
+            { kind:"buff", target:"enemySide", buffId:"gravityBind", duration:9999, linked:true }
+        ],
+        onTurn: [
+            { kind:"buff", target:"enemySide", buffId:"gravityBind", duration:9999, linked:true }
+        ]
+    },
+
+    /* 场地冰封阵：每次行动给敌方全体加冰冻 */
+    FrostField: {
+        name: "冰封领域",
+        targetMode: "area",        /* 需要选格的法阵 */
+        aoeBase: 1,                /* 基础半径1(3x3)，CastingLevel每x2 +1 */
+        cost: [
+            { res:"RemainMagicLevel", value:7, scaling:"CastingLevel" },
+            { res:"RemainMP", value:70, scaling:"CastingLevel" }
+        ],
+        initiativeFactor: 0.9,
+        upkeepPerLevel: 70,
+        upkeepDrainPerTick: 1,
+        maxTurns: null,
+        requireCaster: false,
+        onForm: [
+            { kind:"areaBuff", buffId:"frozen", duration:2, side:"enemy" }
+        ],
+        onTurn: [
+            { kind:"areaBuff", buffId:"frozen", duration:2, side:"enemy" }
+        ]
+    },
+
+
+    /* 恶魔召唤阵：第3次行动时召唤一个大恶魔(友方) */
+    DemonSummon: {
+        name: "恶魔召唤阵",
+        cost: [
+            { res:"RemainMagicLevel", value:80, scaling:"CastingLevel" },
+            { res:"RemainMP", value:500, scaling:"CastingLevel" }
+        ],
+        initiativeFactor: 1.0,
+        upkeepPerLevel: 30,
+        upkeepDrainPerTick: 1,
+        maxTurns: 5,
+        requireCaster: false,
+        onForm: [],
+        onTurn: [
+            { kind:"summon", onTurnEq:3, unit:{
+                name:"大恶魔", type:"monster", special:["demonkind"],
+                maxHP:500, RemainHP:500, maxMP:200, RemainMP:200,
+                MagicLevel:30, SpeedLevel:40, atk:25, initiative:15, level:20,
+                spell:["damage"], weapon:{ name:"魔爪", wtype:"claw", damageType:"physical", element:"none", baseValue:30, scaling:"atk", range:1, speedCost:15 }
+            } }
+        ]
+    },
+
+    Teleport: {
+        name: "传送阵",
+        targetMode: "point",
+        cost: [
+            { res:"RemainMagicLevel", value:5, scaling:null },
+            { res:"RemainMP", value:40, scaling:null }
+        ],
+        initiativeFactor: 1.0,
+        upkeepPerLevel: 1,
+        upkeepDrainPerTick: 999,
+        maxTurns: 1,
+        requireCaster: false,
+        onForm: [
+            { kind:"teleportTo", who:"caster" }
+        ],
+        onTurn: []
+    },
+        AbsoluteZero: {
+        name: "绝对零度领域",
+        targetMode: "area",
+        aoeBase: 1,
+        cost: [
+            { res:"RemainMagicLevel", value:10, scaling:"CastingLevel" },
+            { res:"RemainMP", value:100, scaling:"CastingLevel" }
+        ],
+        initiativeFactor: 0.7,
+        upkeepPerLevel: 50,
+        upkeepDrainPerTick: 1,
+        maxTurns: null,
+        requireCaster: false,
+        onForm: [
+            { kind:"areaBuff", buffId:"frozenSolid", duration:1, side:"enemy" }
+        ],
+        onTurn: [
+            { kind:"areaBuff", buffId:"frozenSolid", duration:1, side:"enemy" }
+        ]
+    },
+        EscapeGate: {
+        name: "归返之门",
+        cost: [
+            { res:"RemainMagicLevel", value:8, scaling:null },
+            { res:"RemainMP", value:60, scaling:null }
+        ],
+        initiativeFactor: 1.0,
+        upkeepPerLevel: 100,
+        upkeepDrainPerTick: 1,
+        maxTurns: 4,
+        requireCaster: false,
+        onForm: [],
+        onTurn: [
+            { kind:"teamEscape", onTurnEq:3 }   /* 第3次行动时全队传送离场 */
+        ]
+    },
+}>>

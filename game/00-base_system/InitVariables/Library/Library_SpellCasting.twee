@@ -1,79 +1,133 @@
 :: Library-Spell Casting
-<<set $SpellLibrary={
-    damage:{
-        name:"致伤术",
-        effects:[
-            {type:"RemainHP",
-            target:"chosen",
-            value:-10,
-            scaling:"CastingLevel"},
-            {type:"RemainMagicLevel",
-            target:"caster",
-            value:-5,
-            scaling:null},
-            {type:"RemainMP",
-            target:"caster",
-            value:-5,
-            scaling:"CastingLevel"}
+<<set $SpellLibrary = {
+    damage: {
+        name: "致伤术",
+        aiRole: "damage",
+        range: 999,
+        cost: [
+            { res:"RemainMagicLevel", value:5, scaling:null },
+            { res:"RemainMP", value:5, scaling:"CastingLevel" }
+        ],
+        defaultTargeting: { side:"enemy", count:1, mode:"chosen" },
+        onHit: [
+            { kind:"damage", damageType:"magical", element:"none", value:-10, scaling:"CastingLevel", tags:["spell"] }
         ]
     },
-    freeze:{
-        name:"冰冻术",
-        effects:[
-            {type:"RemainHP",
-            target:"chosen",
-            value:-5,
-            scaling:"CastingLevel"},
-            {type:"SpeedLevel",
-            target:"chosen",
-            value:-5,
-            scaling:"CastingLevel"},
-            {type:"MagicLevel",
-            target:"chosen",
-            value:-5,
-            scaling:"CastingLevel"},
-            {type:"RemainMagicLevel",
-            target:"caster",
-            value:-5,
-            scaling:null},
-            {type:"RemainMP",
-            target:"caster",
-            value:-5,
-            scaling:"CastingLevel"}
+
+    freeze: {
+        name: "冰冻术",
+        aiRole: "debuff",
+        range: 999,
+        cost: [
+            { res:"RemainMagicLevel", value:5, scaling:null },
+            { res:"RemainMP", value:5, scaling:"CastingLevel" }
+        ],
+        defaultTargeting: { side:"enemy", count:1, mode:"chosen" },
+        onHit: [
+            { kind:"damage", damageType:"magical", element:"ice", value:-5, scaling:"CastingLevel", tags:["spell","ice"] },
+            { kind:"buff", buffId:"frozen", duration:2, stackPerLevel:1, extraRemoveBy:[] }
         ]
     },
-    revive:{
-        name:"复活术",
-        effects:[
-            {type:"status",
-            target:"chosen",
-            value:"active",
-            scaling:null},
-            {type:"RemainMagicLevel",
-            target:"caster",
-            value:-50,
-            scaling:null},
-            {type:"RemainMP",
-            target:"caster",
-            value:-100,
-            scaling:null}
+
+    revive: {
+        name: "复活术",
+        aiRole: "revive",
+        cost: [
+            { res:"RemainMagicLevel", value:50, scaling:null },
+            { res:"RemainMP", value:100, scaling:null }
+        ],
+        defaultTargeting: { side:"ally", count:1, mode:"chosen", status:"defeated" },
+        onHit: [
+            { kind:"status", value:"active" },
+            { kind:"heal", value:1, scaling:null }
         ]
     },
-    heal:{
-        name:"治愈术",
-        effects:[
-            {type:"RemainHP",
-            target:"chosen",
-            value:+5,
-            scaling:"CastingLevel"},
-            {type:"RemainMagicLevel",
-            target:"caster",
-            value:-5,
-            scaling:null},
-            {type:"RemainMP",
-            target:"caster",
-            value:-5,
-            scaling:"CastingLevel"}
+
+    heal: {
+        name: "治愈术",
+        aiRole: "heal",
+        cost: [
+            { res:"RemainMagicLevel", value:5, scaling:null },
+            { res:"RemainMP", value:5, scaling:"CastingLevel" }
+        ],
+        defaultTargeting: { side:"ally", count:1, mode:"chosen" },
+        onHit: [
+            { kind:"heal", value:5, scaling:"CastingLevel" }
         ]
-    }
+    },
+
+    meteor: {
+        name: "陨石术",
+        aiRole: "aoe",
+        aoe: true,
+        range: 999,
+        cost: [
+            { res:"RemainMagicLevel", value:5, scaling:null },
+            { res:"RemainMP", value:50, scaling:"CastingLevel" }
+        ],
+        defaultTargeting: { side:"enemy" },
+        onHit: [
+            { kind:"damage", damageType:"magical", element:"fire", value:-8, scaling:"CastingLevel", tags:["spell","fire"] }
+        ]
+    },
+
+    bless: {
+        name: "祝福术",
+        aiRole: "buff",
+        buffTier: "survival",
+        cost: [
+            { res:"RemainMagicLevel", value:3, scaling:null },
+            { res:"RemainMP", value:10, scaling:"CastingLevel" }
+        ],
+        defaultTargeting: { side:"ally", count:1, mode:"chosen" },
+        onHit: [
+            { kind:"buff", buffId:"blessed", duration:5, stackPerLevel:1 }
+        ]
+    },
+
+    triple: {
+        name: "三连闪",
+        aiRole: "aoe",
+        aoe: true,
+        range: 999,
+        cost: [
+            { res:"RemainMagicLevel", value:5, scaling:null },
+            { res:"RemainMP", value:15, scaling:"CastingLevel" }
+        ],
+        defaultTargeting: { side:"enemy" },
+        onHit: [
+            { kind:"damage", damageType:"magical", element:"none", value:-6, scaling:"CastingLevel", tags:["spell"] }
+        ]
+    },
+
+    chainsplit: {
+        name: "分裂闪电",
+        aiRole: "aoe",
+        aoe: true,
+        range: 999,
+        cost: [
+            { res:"RemainMagicLevel", value:5, scaling:null },
+            { res:"RemainMP", value:20, scaling:"CastingLevel" }
+        ],
+        defaultTargeting: { side:"enemy" },
+        onHit: [
+            { kind:"damage", damageType:"magical", element:"none", value:-30, split:true, scaling:"CastingLevel", tags:["spell"] }
+        ]
+    },
+
+        icelock: {
+        name: "冰封术",
+        aiRole: "debuff",
+        range: 999,
+        cost: [
+            { res:"RemainMagicLevel", value:8, scaling:null },
+            { res:"RemainMP", value:15, scaling:"CastingLevel" }
+        ],
+        defaultTargeting: { side:"enemy", count:1, mode:"chosen" },
+        onHit: [
+            { kind:"damage", damageType:"magical", element:"ice", value:-3, scaling:"CastingLevel", tags:["spell","ice"] },
+            { kind:"buff", buffId:"frozenSolid", duration:2, stackPerLevel:1 }
+        ]
+    },
+
 }>>

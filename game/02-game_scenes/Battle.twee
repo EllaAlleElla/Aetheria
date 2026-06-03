@@ -1,284 +1,618 @@
 :: Battle [nobr]
-<div id="EnemyInfo">
-    <<showEnemyInfo>>
-</div>
-<br>
-<div id="BattleRound">
-    <<include "Battle Round">>
-</div>
-<br>
-<<link "下一轮">>
-    <<set $CurrentRound += 1>>
-    <<checkBattleEnd>>
-    <<if $Player.status === "active">>
-        <<replace "#EnemyInfo">>
-            <<showEnemyInfo>>
-        <</replace>>
-        <<replace "#BattleRound">>
-            <<include "Battle Round">>
-        <</replace>>
-    <</if>>
-<</link>>
+<<set $BattleTurnLog = "">>
+<<set $ActionLog = "">>
+<<takeTurn>>
 
+/* 先检查战斗是否结束(不跳转，只判定) */
+<<set _battleOver = false>>
+<<set _battleResult = "">>
 
-:: Battle Round [nobr]
-
-当前版本还没写战斗流程。请点击下列链接决定战斗结果：
-<<link "胜利">>
-    <<goto $BattleWin>>
-    <<set $CurrentRound = 1>>
-<</link>>
-
-<<link "失败">>
-    <<goto $BattleLose>>
-    <<set $CurrentRound = 1>>
-<</link>>
-
-现在是第$CurrentRound轮。
-
-/* 重置行动值 */
-<<for _set = 0; _set < $Enemy.length; _set++>>
-  <<set $Enemy[_set].RemainMagicLevel = $Enemy[_set].MagicLevel>>
-  <<set $Enemy[_set].RemainSpeedLevel = $Enemy[_set].SpeedLevel>>
+<<set _playerDead = false>>
+<<for _beu = 0; _beu < $Units.length; _beu++>>
+  <<if $Units[_beu].isPlayer && $Units[_beu].status === "dead">>
+    <<set _playerDead = true>>
+  <</if>>
 <</for>>
-<<set $Player.RemainMagicLevel = $Player.MagicLevel>>
-<<set $Player.RemainSpeedLevel = $Player.SpeedLevel>>
+<<set _enemyAlive = false>>
+<<set _allyAlive = false>>
+<<for _beu = 0; _beu < $Units.length; _beu++>>
+  <<if $Units[_beu].status === "active" && not $Units[_beu].isFormation>>
+    <<if $Units[_beu].side === "enemy">><<set _enemyAlive = true>>
+    <<elseif $Units[_beu].side === "ally">><<set _allyAlive = true>>
+    <</if>>
+  <</if>>
+<</for>>
 
-/* 将行动推至 $Enemy[_i]的轮次 */
-<<for _i = 0; _i < $EnemyCount; _i++>>
+<<if _playerDead or not _allyAlive>>
+  <<set _battleOver = true>>
+  <<set _battleResult = "lose">>
+<<elseif not _enemyAlive>>
+  <<set _battleOver = true>>
+  <<set _battleResult = "win">>
+<</if>>
 
-    /* 施法逻辑开始 */
-    /* 用一个足够大的上限防止死循环，比如最多施法10次 */
-    <<set _castCount = 0>>
-    <<for ; _castCount < 10; _castCount++>>
+<<if _battleOver>>
+  /* 战斗结束：先显示最后的行动日志+结果，再让玩家点继续跳转 */
+  <div id="EnemyInfo"><<showBattleField>></div>
+  <<showGrid>>
+  <hr>
+  <<if $BattleTurnLog.trim() !== "">>
+    <<= $BattleTurnLog.trim().replace(/\n/g,"<br>")>>
+    <br>
+  <</if>>
+  <<if $ActionLog && $ActionLog.trim() !== "">>
+    <<= $ActionLog>><br>
+  <</if>>
+  <hr>
+  <<if _battleResult === "win">>
+    <strong>战斗胜利！</strong><br>
+    <<link "继续">>
+      <<set $BattleExitReason = "win">>
+      <<settleBattle>>
+      <<goto $BattleWin>>
+    <</link>>
+  <<else>>
+    <strong>你倒下了……</strong><br>
+    <<link "继续">>
+      <<set $BattleExitReason = "lose">>
+      <<goto $BattleLose>>
+    <</link>>
+  <</if>>
 
-        /* 检查是否还有所需施法资源 */
-        <<if $Enemy[_i].RemainMagicLevel <= 0 || $Enemy[_i].RemainMP <= 0 || $Enemy[_i].RemainHP <= 0 || $Enemy[_i].RemainSpeedLevel <= 0>>
-            <<break>>
+<<elseif _turnUnitId === null>>
+  战斗陷入僵局。
+
+<<elseif _needPlayerInput>>
+  <<set $ActiveActorId = _turnUnitId>>
+  <<findUnit $ActiveActorId>>
+  <<refreshActionPoints _foundUnit>>
+  <<goto "Battle Player Turn">>
+
+<<else>>
+  /* AI/法阵行动完毕，展示日志 */
+  <div id="EnemyInfo"><<showBattleField>></div>
+  <<showGrid>>
+  <hr>
+  <<if $BattleTurnLog.trim() !== "">>
+    <<= $BattleTurnLog.trim().replace(/\n/g,"<br>")>>
+  <<elseif $ActionLog && $ActionLog.trim() !== "">>
+    <<= $ActionLog>>
+  <<else>>
+    （无事发生）
+  <</if>>
+  <hr>
+  <<link "继续">>
+    <<goto "Battle">>
+  <</link>>
+<</if>>
+
+
+
+:: Battle Player Turn [nobr]
+<<findUnit $ActiveActorId>><<set _actor = _foundUnit>>
+
+/* 检查战斗是否已结束(敌人全灭/玩家倒下)，是则跳回Battle展示结果 */
+<<set _ptEnemyAlive = false>>
+<<for _ptU = 0; _ptU < $Units.length; _ptU++>>
+  <<if $Units[_ptU].side === "enemy" && $Units[_ptU].status === "active" && not $Units[_ptU].isFormation>>
+    <<set _ptEnemyAlive = true>><<break>>
+  <</if>>
+<</for>>
+<<if not _ptEnemyAlive or not _actor or _actor.status !== "active">>
+  /* 战斗实质已结束，跳回Battle让它展示结果 */
+  <<if _actor>><<consumeTurn _actor>><</if>>
+  <<goto "Battle">>
+<</if>>
+
+
+<div id="EnemyInfo"><<showBattleField>></div>
+<<showGrid>>
+<hr>
+
+<<if not _actor or _actor.status !== "active">>
+  <<tickBuffs _actor>>
+  <<consumeTurn _actor>>
+  <<goto "Battle">>
+<<else>>
+
+  /* 检查是否还有任何可执行的行动，没有则自动结束回合 */
+  <<set _canAnything = false>>
+  <<if _actor.weapon>>
+    <<set _atkSpeedCost = _actor.weapon.speedCost !== undefined ? _actor.weapon.speedCost : 10>>
+    <<if _actor.RemainSpeedLevel >= _atkSpeedCost>>
+      <<set _enemiesChk = $Units.filter(function(u){ return u.side !== _actor.side && u.status === "active" && !u.isFormation; })>>
+      <<if _enemiesChk.length > 0>><<set _canAnything = true>><</if>>
+    <</if>>
+  <</if>>
+  <<if not _canAnything && _actor.RemainMagicLevel > 0>>
+    <<for _chkS = 0; _chkS < _actor.spell.length; _chkS++>>
+      <<canCast $SpellLibrary[_actor.spell[_chkS]] _actor 1>>
+      <<if _canCast>><<set _canAnything = true>><<break>><</if>>
+    <</for>>
+  <</if>>
+  <<if not _canAnything && _actor.items && _actor.items.length > 0>>
+    <<for _chkI = 0; _chkI < _actor.items.length; _chkI++>>
+      <<canUseItem $ArtificeLibrary[_actor.items[_chkI].id] _actor>>
+      <<if _canUse>><<set _canAnything = true>><<break>><</if>>
+    <</for>>
+  <</if>>
+  <<if not _canAnything && _actor.skill && _actor.skill.length > 0>>
+    <<for _chkK = 0; _chkK < _actor.skill.length; _chkK++>>
+      <<set _chkSk = $SkillLibrary[_actor.skill[_chkK]]>>
+      <<if _actor.RemainSpeedLevel >= _chkSk.cost[0].value && (not _chkSk.requireWeapon or _actor.weapon)>>
+        <<set _canAnything = true>><<break>>
+      <</if>>
+    <</for>>
+  <</if>>
+  <<if not _canAnything && $Field.grid && _actor.pos && _actor.RemainSpeedLevel >= 10>>
+    <<for _mvDy2 = -1; _mvDy2 <= 1 && not _canAnything; _mvDy2++>>
+      <<for _mvDx2 = -1; _mvDx2 <= 1 && not _canAnything; _mvDx2++>>
+        <<if not (_mvDx2 === 0 && _mvDy2 === 0)>>
+          <<canMoveTo _actor (_actor.pos.x + _mvDx2) (_actor.pos.y + _mvDy2)>>
+          <<if _canMove && _actor.RemainSpeedLevel >= _moveCost>><<set _canAnything = true>><</if>>
         <</if>>
+      <</for>>
+    <</for>>
+  <</if>>
 
-        /* 在法术列表里找第一个本轮能释放的法术 */
-        /* 条件：施法者的 RemainMagicLevel 足够支付该法术的消耗 */
-        <<set _selectedSpell = "">>
-        <<set _selectedTarget = null>>
 
-        /* --- 复活逻辑 --- */
-        <<if _selectedSpell === "">>
-            <<set _hasDefeated = $Enemy.some(function(e){ return e.status === "defeated"; })>>
-            <<if _hasDefeated>>
-                <<for _k = 0; _k < $Enemy[_i].spell.length; _k++>>
-                    <<set _spellData = $SpellLibrary[$Enemy[_i].spell[_k]]>>
-                    /* 先检查是否有复活效果 */
-                    <<set _hasReviveEffect = _spellData.effects.some(function(eff){
-                        return eff.type === "status" && eff.value === "active";
-                    })>>
+  <<if not _canAnything>>
+    <<tickBuffs _actor>>
+    <<consumeTurn _actor>>
+    <<goto "Battle">>
+  <<else>>
 
-                    <<set _CastingLevel = 1>>
 
-                    /* 有复活效果再检查消耗是否负担得起 */
-                    <<if _hasReviveEffect && _selectedSpell === "">>
-                        <<canCastSpell _spellData $Enemy[_i] _CastingLevel>>
-                        <<if _canCast>>
-                            <<set _selectedSpell = $Enemy[_i].spell[_k]>>
-                            <<set _selectedTarget = $Enemy.find(function(e){ return e.status === "defeated"; })>>
-                        <</if>>
-                    <</if>>
-                <</for>>
-            <</if>>
-        <</if>>
-        /* --- 治疗 --- */
-        <<if _selectedSpell === "">>
-            <<set _inDangerZone = $Enemy.some(function(e){ return e.status === "active" && e.RemainHP < e.hp * 0.3; })>>/* 检查是否有血量低于30%的敌人,有则返回true */
-            <<if _inDangerZone>>/* 基于上一条检查结果,true则进入治疗释放逻辑 */
-                <<for _k = 0; _k < $Enemy[_i].spell.length; _k++>>/* 遍历此轮次行动敌人的已掌握法术, k为第k条法术 */
-
-                    <<set _spellData = $SpellLibrary[$Enemy[_i].spell[_k]]>>/* 导入第k条法术的效果数据 */
-
-                    /* 检查第k条法术是否能提升剩余血量,且作用于施法对象,是则返回true */
-                    <<set _hasHealEffect = _spellData.effects.some(function(eff){
-                        return eff.type === "RemainHP" && eff.value > 0 && eff.target === "chosen";
-                    })>>
-
-                    /* 检查是否满足释放要求,如具有足够的剩余mp */
-                    <<if _hasHealEffect && _selectedSpell === "">>
-                        /* 确定释放等级 */
-                        /* 找到治疗效果条目，获取每级回复量 */
-                        <<set _healEntry = _spellData.effects.find(function(eff){
-                            return eff.type === "RemainHP" && eff.value > 0 && eff.target === "chosen";
-                        })>>
-
-                        /* 每1级CastingLevel回复的血量 */
-                        <<set _healPerLevel = _healEntry.value>>
-
-                        /* 目标需要回复的血量 = 80%最大血量 - 当前血量 */
-                        <<set _healTarget = $Enemy.find(function(e){ return e.status === "active" && e.RemainHP < e.hp * 0.3; })>>
-                        <<set _hpNeeded = _healTarget.hp * 0.8 - _healTarget.RemainHP>>
-
-                        /* 向上取整，算出最少需要多少级 */
-                        /* 如果已经高于80%（差值为负或0），至少释放1级 */
-                        <<if _hpNeeded <= 0>>
-                            <<set _CastingLevel = 1>>
-                            <<else>>
-                                <<set _CastingLevel = Math.ceil(_hpNeeded / _healPerLevel)>>
-                        <</if>>
-
-                        /* 不能超过施法者当前剩余的法术等级 */
-                        <<if _CastingLevel > $Enemy[_i].RemainMagicLevel>>
-                            <<set _CastingLevel = $Enemy[_i].RemainMagicLevel>>
-                        <</if>>
-
-                        <<canCastSpell _spellData $Enemy[_i] _CastingLevel>>
-                        <<if _canCast>>
-                            <<set _selectedSpell = $Enemy[_i].spell[_k]>>
-                            <<set _selectedTarget = _healTarget>>
-                        <</if>>
-                    <</if>>
-                <</for>>
-            <</if>>
-        <</if>>
-        /* --- 伤害 --- */
-        <<if _selectedSpell === "">>
-            <<if $Player.RemainHP <= 0>>
-            <<else>>
-                <<for _k = 0; _k < $Enemy[_i].spell.length; _k++>>/* 遍历此轮次行动敌人的已掌握法术, k为第k条法术 */
-
-                    <<set _spellData = $SpellLibrary[$Enemy[_i].spell[_k]]>>/* 导入第k条法术的效果数据 */
-
-                    /* 检查第k条法术是否能降低剩余血量,且作用于施法对象,是则返回true */
-                    <<set _hasDamageEffect = _spellData.effects.some(function(eff){
-                        return eff.type === "RemainHP" && eff.value < 0 && eff.target === "chosen";
-                    })>>
-
-                    <<if _hasDamageEffect && _selectedSpell === "">>
-                        /* 找到伤害效果条目，获取每级伤害量 */
-                        <<set _dmgEntry = _spellData.effects.find(function(eff){
-                            return eff.type === "RemainHP" && eff.value < 0 && eff.target === "chosen";
-                        })>>
-
-                        /* 每1级CastingLevel造成的伤害(负数) */
-                        <<set _dmgPerLevel = _dmgEntry.value>>
-
-                        /* 找到MP消耗条目，获取每级MP消耗(负数) */
-                        <<set _mpCostEntry = _spellData.effects.find(function(eff){
-                            return eff.type === "RemainMP" && eff.target === "caster";
-                        })>>
-
-                        /* 找到MagicLevel消耗条目 */
-                        <<set _mlCostEntry = _spellData.effects.find(function(eff){
-                            return eff.type === "RemainMagicLevel" && eff.target === "caster";
-                        })>>
-
-                        /* ===== 优先检查：能否一击终结玩家 ===== */
-                        /* 一击终结所需等级 = 向上取整(玩家当前血量 / 每级伤害的绝对值) */
-                        <<set _killLevel = Math.ceil($Player.RemainHP / Math.abs(_dmgPerLevel))>>
-
-                        /* 限制不超过施法者剩余法术等级 */
-                        <<if _killLevel > $Enemy[_i].RemainMagicLevel>>
-                            <<set _killLevel = $Enemy[_i].RemainMagicLevel>>
-                        <</if>>
-
-                        /* 检查该等级能否释放 */
-                        <<canCastSpell _spellData $Enemy[_i] _killLevel>>
-
-                        /* 如果能释放，且确实能打死玩家 */
-                        <<if _canCast && Math.abs(_dmgPerLevel) * _killLevel >= $Player.RemainHP>>
-                            <<set _CastingLevel = _killLevel>>
-                            <<set _selectedSpell = $Enemy[_i].spell[_k]>>
-                            <<set _selectedTarget = $Player>>
-
-                        <<else>>
-                            /* ===== 非终结：计算保守释放等级 ===== */
-
-                            /* 确定保留mp比例n */
-                            <<if $CurrentRound <= 3>>
-                                <<set _n = 5>>
-                            <<else>>
-                                <<set _n = 1 - $CurrentRound * 0.15>>
-                                /* 最低为0，不保留MP但也不透支 */
-                                <<if _n < 0>>
-                                    <<set _n = 0>>
-                                <</if>>
-                            <</if>>
-
-                            /* 施法者需要保留的最低mp */
-                            <<set _reserveMP = $Enemy[_i].mp * _n * 0.1>>
-
-                            /* 计算释放法术后施法者还能剩多少MP来反推最大可承受等级 */
-                            /* 先看法术对施法者有没有MP消耗 */
-                            <<set _selfMPCostEntry = _spellData.effects.find(function(eff){
-                                return eff.type === "RemainMP" && eff.target === "caster";
-                            })>>
-
-                            /* 施法者当前可用于消耗的MP余量 */
-                            <<set _mpBudget = $Enemy[_i].RemainMP - _reserveMP>>
-
-                            /* 如果保留后的余量已经不足，不释放 */
-                            <<if _mpBudget <= 0>>
-                                /* 跳过此法术，什么都不做 */
-
-                            <<else>>
-                                /* 在保留n*10% MP的前提下，计算最大释放等级 */
-                                /* 从施法者剩余法术等级开始，作为上限 */
-                                <<set _maxLevel = $Enemy[_i].RemainMagicLevel>>
-
-                                /* 如果法术对施法者有MP消耗，限制等级 */
-                                <<if _selfMPCostEntry>>
-                                    <<set _mpMaxLevel = Math.floor(_mpBudget / Math.abs(_selfMPCostEntry.value))>>
-                                    <<if _mpMaxLevel < _maxLevel>>
-                                        <<set _maxLevel = _mpMaxLevel>>
-                                    <</if>>
-                                <</if>>
-
-                                /* 至少1级 */
-                                <<if _maxLevel < 1>>
-                                    <<set _maxLevel = 1>>
-                                <</if>>
-
-                                <<set _CastingLevel = _maxLevel>>
-                                /* 不需要超过打死玩家所需的等级 */
-                                <<set _killNeed = Math.ceil($Player.RemainHP / Math.abs(_dmgPerLevel))>>
-                                <<if _CastingLevel > _killNeed>>
-                                    <<set _CastingLevel = _killNeed>>
-                                <</if>>
-
-                                /* 检查能否释放 */
-                                <<canCastSpell _spellData $Enemy[_i] _CastingLevel>>
-                                <<if _canCast>>
-                                    /* 释放后施法者剩余MP检查 */
-                                    <<if _selfMPCostEntry>>
-                                        <<set _afterMP = $Enemy[_i].RemainMP + _selfMPCostEntry.value * _CastingLevel>>
-                                    <<else>>
-                                        <<set _afterMP = $Enemy[_i].RemainMP>>
-                                    <</if>>
-
-                                    <<if _afterMP >= _reserveMP>>
-                                        <<set _selectedSpell = $Enemy[_i].spell[_k]>>
-                                        <<set _selectedTarget = $Player>>
-                                    <</if>>
-                                <</if>>
-                            <</if>>
-                        <</if>>
-                    <</if>>
-                <</for>>
-            <</if>>
-        <</if>>
-
-        /* --- 后续可以继续加其他优先级的法术判断，结构相同 --- */
-        /* 如果没找到任何可以释放的法术，终止循环 */
-        <<if _selectedSpell === "" || _selectedTarget === null>>
-            <<break>>
-        <</if>>
-
-        /* 释放法术 */
-        <<castSpell _selectedSpell _selectedTarget $Enemy[_i] _CastingLevel>>
-
-    <</for>>/* 施法逻辑结束 */
-
-    /* 检测玩家是否在此敌人行动中死亡 */
-    <<if $Player.RemainHP <= 0>>
-        <<set $Player.status = "defeated">>
-        <<set $Player.RemainHP = 1>>
-        <<break>>
+    轮到 <<= _actor.name>> 行动。<br>
+    行动力：物理 <<= _actor.RemainSpeedLevel>> / 魔力 <<= _actor.RemainMagicLevel>><br>
+    <<if $BattleTurnLog.trim() !== "">>
+      <hr><<= $BattleTurnLog.trim().replace(/\n/g,"<br>")>><hr>
     <</if>>
 
-<</for>>/* Enemy[_i]的行动轮次结束 */
+    /* ===== 普攻（选格）===== */
+    <<if _actor.weapon && _actor.RemainSpeedLevel >= (_actor.weapon.speedCost !== undefined ? _actor.weapon.speedCost : 10)>>
+      <<link "普通攻击（选格）">>
+        <<goto "Battle Target Cell">>
+      <</link>><br>
+    <</if>>
+    
+    /* ===== 剑技列表 ===== */
+    <<if _actor.skill && _actor.skill.length > 0>>
+      <strong>剑技：</strong><br>
+      <<for _puK = 0; _puK < _actor.skill.length; _puK++>>
+        <<set _skKey = _actor.skill[_puK]>>
+        <<set _skDef = $SkillLibrary[_skKey]>>
+        /* 检查SpeedLevel够 */
+        <<set _skCost = _skDef.cost[0].value>>
+        <<if _actor.RemainSpeedLevel >= _skCost && (not _skDef.requireWeapon or _actor.weapon)>>
+          <<capture _skKey, _skDef>>
+            <<link _skDef.name>>
+              <<set $PendingSkill = _skKey>>
+              <<if _skDef.targetMode === "self">>
+                /* 自身剑技直接执行 */
+                <<performAction `{ actionType:"physical", sourceId:$ActiveActorId, ref:_skKey }`>>
+                <<goto "Battle Player Turn">>
+              <<else>>
+                <<goto "Battle Skill Target Cell">>
+              <</if>>
+            <</link>>
+          <</capture>>
+        <<else>>
+          <span style="opacity:0.5"><<= _skDef.name>>（无法使用）</span>
+        <</if>>
+        <br>
+      <</for>>
+    <</if>>
+
+
+    /* ===== 法术列表 ===== */
+    <<if _actor.RemainMagicLevel > 0 && _actor.spell.length > 0>>
+      <strong>法术：</strong><br>
+      <<for _puS = 0; _puS < _actor.spell.length; _puS++>>
+        <<set _spKey = _actor.spell[_puS]>>
+        <<set _sp = $SpellLibrary[_spKey]>>
+        <<canCast _sp _actor 1>>
+        <<if _canCast>>
+          <<capture _spKey, _sp>>
+            <<link _sp.name>>
+              <<if _sp.defaultTargeting && (_sp.defaultTargeting.side === "ally" || _sp.defaultTargeting.side === "self")>>
+                <<set $PendingSpell = _spKey>>
+                <<goto "Battle Cast Menu">>
+              <<else>>
+                <<set $PendingSpell = _spKey>>
+                <<goto "Battle Spell Target Cell">>
+              <</if>>
+            <</link>>
+          <</capture>>
+        <<else>>
+          <span style="opacity:0.5"><<= _sp.name>>（魔力不足）</span>
+        <</if>>
+        <br>
+      <</for>>
+    <</if>>
+
+        /* ===== 法阵列表 ===== */
+    <<if _actor.RemainMagicLevel > 0 && _actor.formation && _actor.formation.length > 0>>
+      <strong>法阵：</strong><br>
+      <<for _puF = 0; _puF < _actor.formation.length; _puF++>>
+        <<set _fmKey = _actor.formation[_puF]>>
+        <<set _fmDef = $FormationLibrary[_fmKey]>>
+        <<capture _fmKey, _fmDef>>
+          <<link _fmDef.name>>
+            <<set $PendingFormation = _fmKey>>
+            <<goto "Battle Formation Menu">>
+          <</link>>
+        <</capture>>
+        <br>
+      <</for>>
+    <</if>>
+
+    
+    /* ===== 道具列表 ===== */
+    <<if _actor.items && _actor.items.length > 0>>
+      <strong>道具：</strong><br>
+      <<for _puI = 0; _puI < _actor.items.length; _puI++>>
+        <<set _itEntry = _actor.items[_puI]>>
+        <<set _itDef = $ArtificeLibrary[_itEntry.id]>>
+        <<canUseItem _itDef _actor>>
+        <<if _canUse>>
+          <<set _itText = _itDef.name + "（×" + _itEntry.count + "）">>
+          <<set _itId = _itEntry.id>>
+          <<capture _itId, _itText>>
+            <<link _itText>>
+              <<set $PendingItem = _itId>>
+              <<goto "Battle Item Menu">>
+            <</link>>
+          <</capture>>
+        <<else>>
+          <span style="opacity:0.5"><<= _itDef.name>>（×<<= _itEntry.count>>，行动力不足）</span>
+        <</if>>
+        <br>
+      <</for>>
+    <</if>>
+
+
+    
+
+
+    /* ===== 移动 ===== */
+    <<if $Field.grid && _actor.pos && _actor.RemainSpeedLevel >= 10>>
+      <<link "移动">>
+        <<goto "Battle Move Target Cell">>
+      <</link>><br>
+    <</if>>
+
+
+
+    <hr>
+    <<link "结束回合">>
+      <<findUnit $ActiveActorId>><<set _a = _foundUnit>>
+      <<tickBuffs _a>>
+      <<consumeTurn _a>>
+      <<goto "Battle">>
+    <</link>>
+
+    <<canFlee _actor>>
+    <<if _canFlee>>
+      <<link "逃跑">>
+        <<findUnit $ActiveActorId>><<set _a = _foundUnit>>
+        <<tryFlee _a>>
+        <<if _fleeFail>>
+          <<set $BattleTurnLog = $BattleTurnLog + $ActionLog + "\n">>
+          <<tickBuffs _a>>
+          <<consumeTurn _a>>
+          <<goto "Battle">>
+        <</if>>
+      <</link>>
+    <<else>>
+      <span style="opacity:0.5">逃跑（你无路可逃，需先移动到地图边缘）</span>
+    <</if>>
+    <br>
+
+
+
+
+
+
+
+  <</if>>
+
+<</if>>
+
+
+
+:: Battle Cast Menu [nobr]
+<<findUnit $ActiveActorId>><<set _actor = _foundUnit>>
+<<set _sp = $SpellLibrary[$PendingSpell]>>
+
+<div id="EnemyInfo"><<showBattleField>></div>
+<<showGrid>>
+<hr>
+<<= _actor.name>> 准备施放 <strong><<= _sp.name>></strong>。<br>
+
+<<set _maxLv = _actor.RemainMagicLevel>>
+<<set _mlPerLv = 0>>
+<<for _cmI = 0; _cmI < _sp.cost.length; _cmI++>>
+  <<if _sp.cost[_cmI].res === "RemainMagicLevel" && _sp.cost[_cmI].scaling === "CastingLevel">>
+    <<set _mlPerLv = _sp.cost[_cmI].value>>
+  <</if>>
+<</for>>
+<<if _mlPerLv > 0>>
+  <<set _maxLv = Math.floor(_actor.RemainMagicLevel / _mlPerLv)>>
+<</if>>
+<<if _maxLv < 1>><<set _maxLv = 1>><</if>>
+
+<<set _tg = _sp.defaultTargeting>>
+
+<<if _tg.mode === "chosen">>
+  选择目标与施法等级：<br>
+  <<set _wantStatus = _tg.status || "active">>
+  <<set _cands = $Units.filter(function(u){
+    if (u.status !== _wantStatus) return false;
+    if (u.isFormation) return false;
+    if (_tg.side === "enemy") return u.side !== _actor.side;
+    if (_tg.side === "ally") return u.side === _actor.side;
+    if (_tg.side === "self") return u.id === _actor.id;
+    return true;
+  })>>
+  <<if $CastLevelChoice === undefined || $CastLevelChoice > _maxLv>><<set $CastLevelChoice = 1>><</if>>
+  当前等级：<<= $CastLevelChoice>> / 上限<<= _maxLv>>
+  <<link "−">><<if $CastLevelChoice > 1>><<set $CastLevelChoice -= 1>><</if>><<goto "Battle Cast Menu">><</link>>
+  <<link "+">><<if $CastLevelChoice < _maxLv>><<set $CastLevelChoice += 1>><</if>><<goto "Battle Cast Menu">><</link>>
+  <br><br>
+  <<for _cmT = 0; _cmT < _cands.length; _cmT++>>
+    <<set _cmName = _cands[_cmT].name>>
+    <<set _cmId = _cands[_cmT].id>>
+    <<set _cmText = "对 " + _cmName + " 施放">>
+    <<capture _cmId, _cmText>>
+      <<link _cmText>>
+        <<performAction `{ actionType:"spell", sourceId:$ActiveActorId, ref:$PendingSpell, castingLevel:$CastLevelChoice, chosenIds:[_cmId] }`>>
+        <<set $CastLevelChoice = 1>>
+        <<goto "Battle Player Turn">>
+      <</link>>
+    <</capture>>
+    <br>
+  <</for>>
+
+<<else>>
+  <<if $CastLevelChoice === undefined || $CastLevelChoice > _maxLv>><<set $CastLevelChoice = 1>><</if>>
+  施法等级：<<= $CastLevelChoice>> / 上限<<= _maxLv>>
+  <<link "−">><<if $CastLevelChoice > 1>><<set $CastLevelChoice -= 1>><</if>><<goto "Battle Cast Menu">><</link>>
+  <<link "+">><<if $CastLevelChoice < _maxLv>><<set $CastLevelChoice += 1>><</if>><<goto "Battle Cast Menu">><</link>>
+  <br><br>
+  <<set _castText = "施放（" + _sp.name + "）">>
+  <<capture _castText>>
+    <<link _castText>>
+      <<performAction `{ actionType:"spell", sourceId:$ActiveActorId, ref:$PendingSpell, castingLevel:$CastLevelChoice }`>>
+      <<set $CastLevelChoice = 1>>
+      <<goto "Battle Player Turn">>
+    <</link>>
+  <</capture>>
+  <br>
+<</if>>
+
+<hr>
+<<link "返回">>
+  <<set $CastLevelChoice = 1>>
+  <<goto "Battle Player Turn">>
+<</link>>
+
+
+:: Battle Formation Menu [nobr]
+<<findUnit $ActiveActorId>><<set _actor = _foundUnit>>
+<<set _fm = $FormationLibrary[$PendingFormation]>>
+
+<div id="EnemyInfo"><<showBattleField>></div>
+<<showGrid>>
+<hr>
+<<= _actor.name>> 准备布置法阵 <strong><<= _fm.name>></strong>。<br>
+
+/* 算最大等级：受所有 scaling:CastingLevel 的 cost 项限制 */
+<<set _fmMaxLv = 9999>>
+<<for _fmI = 0; _fmI < _fm.cost.length; _fmI++>>
+  <<set _fmC = _fm.cost[_fmI]>>
+  <<if _fmC.scaling === "CastingLevel" && _fmC.value > 0>>
+    <<set _fmAvail = _actor[_fmC.res]>>
+    <<set _fmCap = Math.floor(_fmAvail / _fmC.value)>>
+    <<if _fmCap < _fmMaxLv>><<set _fmMaxLv = _fmCap>><</if>>
+  <</if>>
+<</for>>
+<<if _fmMaxLv < 1>><<set _fmMaxLv = 1>><</if>>
+
+<<if $CastLevelChoice === undefined || $CastLevelChoice > _fmMaxLv>><<set $CastLevelChoice = 1>><</if>>
+施法等级：<<= $CastLevelChoice>> / 上限<<= _fmMaxLv>>
+（消耗：
+<<for _fmI = 0; _fmI < _fm.cost.length; _fmI++>>
+  <<set _fmC = _fm.cost[_fmI]>>
+  <<= _fmC.res>> <<= _fmC.scaling === "CastingLevel" ? _fmC.value * $CastLevelChoice : _fmC.value>>
+  <<if _fmI < _fm.cost.length - 1>>、<</if>>
+<</for>>
+）<br>
+<<link "−">><<if $CastLevelChoice > 1>><<set $CastLevelChoice -= 1>><</if>><<goto "Battle Formation Menu">><</link>>
+<<link "+">><<if $CastLevelChoice < _fmMaxLv>><<set $CastLevelChoice += 1>><</if>><<goto "Battle Formation Menu">><</link>>
+<br><br>
+
+<<set _fmCastText = "布置（" + _fm.name + "）">>
+<<if _fm.targetMode === "area" || _fm.targetMode === "point">>
+  <<set _fmSelText = _fmCastText + "→选格">>
+  <<capture _fmSelText>>
+    <<link _fmSelText>>
+      <<goto "Battle Formation Target Cell">>
+    <</link>>
+  <</capture>>
+<<else>>
+  <<capture _fmCastText>>
+    <<link _fmCastText>>
+      <<performAction `{ actionType:"formation", sourceId:$ActiveActorId, ref:$PendingFormation, castingLevel:$CastLevelChoice }`>>
+      <<set $CastLevelChoice = 1>>
+      <<goto "Battle Player Turn">>
+    <</link>>
+  <</capture>>
+<</if>>
+<hr>
+<<link "返回">><<set $CastLevelChoice = 1>><<goto "Battle Player Turn">><</link>>
+
+
+:: Battle Item Menu [nobr]
+<<findUnit $ActiveActorId>><<set _actor = _foundUnit>>
+<<set _it = $ArtificeLibrary[$PendingItem]>>
+
+<div id="EnemyInfo"><<showBattleField>></div>
+<<showGrid>>
+<hr>
+<<= _actor.name>> 准备使用 <strong><<= _it.name>></strong>。<br>
+
+<<if _it.useType === "drink">>
+  /* 喝药对自己，直接用 */
+  <<set _imText = "使用（" + _it.name + "）">>
+  <<capture _imText>>
+    <<link _imText>>
+      <<performAction `{ actionType:"item", sourceId:$ActiveActorId, ref:$PendingItem }`>>
+      <<goto "Battle Player Turn">>
+    <</link>>
+  <</capture>>
+  <br>
+<<else>>
+  /* throw/cast/formation：选格。道具射程暂不限(999)，可加item.range后用 */
+  <<set _itRange = _it.range !== undefined ? _it.range : 999>>
+  选择目标格：<br>
+  <<gridTargetUI _actor _itRange 0 "item" $PendingItem>>
+<</if>>
+
+<hr>
+<<link "返回">><<goto "Battle Player Turn">><</link>>
+
+
+
+:: Battle Spell Target Cell [nobr]
+<<findUnit $ActiveActorId>><<set _actor = _foundUnit>>
+<<set _sp = $SpellLibrary[$PendingSpell]>>
+
+<<set _maxLv = _actor.RemainMagicLevel>>
+<<set _mlPerLv = 0>>
+<<for _cmI = 0; _cmI < _sp.cost.length; _cmI++>>
+  <<if _sp.cost[_cmI].res === "RemainMagicLevel" && _sp.cost[_cmI].scaling === "CastingLevel">>
+    <<set _mlPerLv = _sp.cost[_cmI].value>>
+  <</if>>
+<</for>>
+<<if _mlPerLv > 0>><<set _maxLv = Math.floor(_actor.RemainMagicLevel / _mlPerLv)>><</if>>
+<<if _maxLv < 1>><<set _maxLv = 1>><</if>>
+<<if $CastLevelChoice === undefined || $CastLevelChoice > _maxLv>><<set $CastLevelChoice = 1>><</if>>
+
+<<= _actor.name>> 施放 <strong><<= _sp.name>></strong><br>
+选择目标格：<br>
+<<gridTargetUI _actor 999 0 "spell" $PendingSpell>>
+<hr>
+施法等级：<span id="lvDisp"><<= $CastLevelChoice>></span> / <<= _maxLv>>
+<<link "−">>
+  <<if $CastLevelChoice > 1>><<set $CastLevelChoice -= 1>><</if>>
+  <<replace "#lvDisp">><<= $CastLevelChoice>><</replace>>
+  <<if _sp.aoe>><<aoeRadius $CastLevelChoice>><<replace "#radDisp">><<= _aoeR>><</replace>><</if>>
+<</link>>
+<<link "+">>
+  <<if $CastLevelChoice < _maxLv>><<set $CastLevelChoice += 1>><</if>>
+  <<replace "#lvDisp">><<= $CastLevelChoice>><</replace>>
+  <<if _sp.aoe>><<aoeRadius $CastLevelChoice>><<replace "#radDisp">><<= _aoeR>><</replace>><</if>>
+<</link>>
+<<if _sp.aoe>>　范围半径<span id="radDisp"><<aoeRadius $CastLevelChoice>><<= _aoeR>></span><</if>>
+<br>
+<<link "返回">><<goto "Battle Player Turn">><</link>>
+
+
+:: Battle Target Cell [nobr]
+<<findUnit $ActiveActorId>><<set _actor = _foundUnit>>
+<<set _w = _actor.weapon>>
+<<set _tcRange = _w && _w.range !== undefined ? _w.range : 1>>
+<<set _tcMin = _w && _w.minRange ? _w.minRange : 0>>
+
+<<stat _actor "SpeedLevel">><<set _tcMaxHeavy = Math.floor(_stat / 50)>>
+<<if $AttackHeavy === undefined>><<set $AttackHeavy = 0>><</if>>
+<<if $AttackHeavy > _tcMaxHeavy>><<set $AttackHeavy = _tcMaxHeavy>><</if>>
+
+<<= _actor.name>> 攻击（射程<<= _tcRange>><<if _tcMin>>，近<<= _tcMin>>格减伤<</if>>）<br>
+选择目标格：<br>
+<<gridTargetUI _actor _tcRange _tcMin "attack" null>>
+<hr>
+<<set _tcBaseCost = _w && _w.speedCost !== undefined ? _w.speedCost : 10>>
+强度：<span id="heavyDisp"><<if $AttackHeavy === 0>>普通攻击<<else>>重击<<= $AttackHeavy>>级（×<<= 1 + $AttackHeavy>>）<</if>>　消耗<span id="heavyCost"><<= $AttackHeavy === 0 ? _tcBaseCost : _tcBaseCost + 10 * ($AttackHeavy + 1)>></span>
+<<if _tcMaxHeavy > 0>>
+  <<capture _tcBaseCost, _tcMaxHeavy>>
+    <<link "−强度">>
+      <<if $AttackHeavy > 0>><<set $AttackHeavy -= 1>><</if>>
+      <<replace "#heavyDisp">><<if $AttackHeavy === 0>>普通攻击<<else>>重击<<= $AttackHeavy>>级（×<<= 1 + $AttackHeavy>>）<</if>><</replace>>
+      <<replace "#heavyCost">><<= $AttackHeavy === 0 ? _tcBaseCost : _tcBaseCost + 10 * ($AttackHeavy + 1)>><</replace>>
+    <</link>>
+    <<link "+强度">>
+      <<if $AttackHeavy < _tcMaxHeavy>><<set $AttackHeavy += 1>><</if>>
+      <<replace "#heavyDisp">><<if $AttackHeavy === 0>>普通攻击<<else>>重击<<= $AttackHeavy>>级（×<<= 1 + $AttackHeavy>>）<</if>><</replace>>
+      <<replace "#heavyCost">><<= $AttackHeavy === 0 ? _tcBaseCost : _tcBaseCost + 10 * ($AttackHeavy + 1)>><</replace>>
+    <</link>>
+  <</capture>>
+<</if>>
+<br>
+<<link "返回">><<set $AttackHeavy = 0>><<goto "Battle Player Turn">><</link>>
+
+
+:: Battle Skill Target Cell [nobr]
+<<findUnit $ActiveActorId>><<set _actor = _foundUnit>>
+<<set _sk = $SkillLibrary[$PendingSkill]>>
+
+<<= _actor.name>> 使用 <strong><<= _sk.name>></strong>　消耗<<= _sk.cost[0].value>>SpeedLevel<br>
+<<if _sk.aoeRadius !== undefined>>范围半径<<= _sk.aoeRadius>>　<</if>>
+<<if _sk.targetMode === "thrust">>（突刺：朝目标方向冲撞，最远<<= _sk.maxDistance>>格）<</if>>
+<<if _sk.targetMode === "climb">>（攀爬：无视地势移动到相邻格）<</if>>
+<br>选择目标格：<br>
+<<set _skRange = _sk.range !== undefined ? _sk.range : (_sk.maxDistance !== undefined ? _sk.maxDistance : 1)>>
+<<gridTargetUI _actor _skRange 0 "skill" $PendingSkill>>
+<hr>
+<<link "返回">><<goto "Battle Player Turn">><</link>>
+
+
+:: Battle Formation Target Cell [nobr]
+<<findUnit $ActiveActorId>><<set _actor = _foundUnit>>
+<<set _fm = $FormationLibrary[$PendingFormation]>>
+
+<<set _fmMaxLv = 9999>>
+<<for _fmI = 0; _fmI < _fm.cost.length; _fmI++>>
+  <<set _fmC = _fm.cost[_fmI]>>
+  <<if _fmC.scaling === "CastingLevel" && _fmC.value > 0>>
+    <<set _fmAvail = _actor[_fmC.res]>>
+    <<set _fmCap = Math.floor(_fmAvail / _fmC.value)>>
+    <<if _fmCap < _fmMaxLv>><<set _fmMaxLv = _fmCap>><</if>>
+  <</if>>
+<</for>>
+<<if _fmMaxLv < 1>><<set _fmMaxLv = 1>><</if>>
+<<if $CastLevelChoice === undefined || $CastLevelChoice > _fmMaxLv>><<set $CastLevelChoice = 1>><</if>>
+
+<<= _actor.name>> 布置 <strong><<= _fm.name>></strong><br>
+选择目标格：<br>
+<<gridTargetUI _actor 999 0 "formation" $PendingFormation>>
+<hr>
+施法等级：<span id="fmLvDisp"><<= $CastLevelChoice>></span> / <<= _fmMaxLv>>
+<<capture _fmMaxLv>>
+  <<link "−">>
+    <<if $CastLevelChoice > 1>><<set $CastLevelChoice -= 1>><</if>>
+    <<replace "#fmLvDisp">><<= $CastLevelChoice>><</replace>>
+    <<if _fm.aoeBase !== undefined>><<replace "#fmRadDisp">><<= _fm.aoeBase + Math.floor(Math.log($CastLevelChoice)/Math.log(2))>><</replace>><</if>>
+  <</link>>
+  <<link "+">>
+    <<if $CastLevelChoice < _fmMaxLv>><<set $CastLevelChoice += 1>><</if>>
+    <<replace "#fmLvDisp">><<= $CastLevelChoice>><</replace>>
+    <<if _fm.aoeBase !== undefined>><<replace "#fmRadDisp">><<= _fm.aoeBase + Math.floor(Math.log($CastLevelChoice)/Math.log(2))>><</replace>><</if>>
+  <</link>>
+<</capture>>
+<<if _fm.aoeBase !== undefined>>　半径<span id="fmRadDisp"><<= _fm.aoeBase + Math.floor(Math.log($CastLevelChoice)/Math.log(2))>></span><</if>>
+<br>
+<<link "返回">><<set $CastLevelChoice = 1>><<goto "Battle Player Turn">><</link>>
+
+
+:: Battle Move Target Cell [nobr]
+<<findUnit $ActiveActorId>><<set _actor = _foundUnit>>
+
+<div id="EnemyInfo"><<showBattleField>></div>
+<hr>
+<<= _actor.name>> 移动（当前 <<= _actor.pos.x>>,<<= _actor.pos.y>>，剩余SpeedLevel <<= _actor.RemainSpeedLevel>>）<br>
+选择移动目标格（黄边可移动）：<br>
+<<gridTargetUI _actor 1 0 "move" null>>
+<hr>
+<<link "返回">><<goto "Battle Player Turn">><</link>>

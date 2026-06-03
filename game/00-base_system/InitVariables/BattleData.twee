@@ -1,8 +1,50 @@
 :: Battle Data
-<<set $Enemy = []>>/* 数组，储存敌人数据 */
-<<set $EnemyCount = 0>>/* 敌人数量 */
+/* ===== 全局战斗状态 ===== */
+<<set $Units = []>>              /* 所有参战单位 */
+<<set $Field = {
+    buff: [],                    /* 全局buff */
+    triggers: [],                /* 法阵/增援等延时触发器 */
+    tick: 0,                     /* 全局时间刻度，每次ATB推进+1 */
+    round: 1,                    /* 纯显示用计数 */
+    grid: null                   /* 地块信息，无地图战为null，留待阶段8 */
+}>>
+<<set $BattleResult = {
+    defeated: [],                /* 本场被击败单位的快照，用于结算 */
+    expGained: 0
+}>>
+<<set $BattleWin = "">>          /* 胜利跳转段落 */
+<<set $BattleLose = "">>         /* 失败跳转段落 */
+<<set $BattleFlee = "">>
 
-<<set $CurrentRound = 1>>/* 战斗中回合数 */
+/* ===== 玩家设置 ===== */
+<<set $Settings = {
+    controlAllies: false,        /* 是否可手动操作友方单位 */
+    allowLethal: false           /* 玩家方单位归零时是否致命(dead)；false则defeated */
+}>>
 
-<<set $BattleWin = "">>/* 战斗胜利后跳转到哪个段落 */
-<<set $BattleLose = "">>/* 战斗失败后跳转到哪个段落 */
+/* ===== 计数器，用于生成唯一 id ===== */
+<<set $UnitIdCounter = 0>>
+
+<<set $ActionLog = "">>          /* 行动文字记录 */
+<<set $BattleTurnLog = "">>      /* 回合文字记录 */
+<<set $ActiveActorId = "">>
+<<set $PendingSpell = "">>
+<<set $CastLevelChoice = 1>>
+
+<<set $AllocAmount = 1>>
+
+<<set $PendingFormation = "">>
+
+<<set $PendingItem = "">>
+
+<<set $DebugMsg = "">>
+
+<<set $BattleExitReason = "">>   /* "win"/"lose"/"flee"/"teleport"，剧情可读 */
+
+<<set $CheatTerrain = "plain">>   /* 作弊战斗用的地形tag */
+
+<<set $CheatCliffSide = "top">>
+
+<<set $PlaceholderEnemy = false>>
+
+<<set $CheatUseFixedMap = "">>

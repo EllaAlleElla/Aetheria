@@ -1,0 +1,52 @@
+:: Library-Skill
+<<set $SkillLibrary = {
+    doubleStrike: {
+        name: "双重斩",
+        cost: [{ res:"RemainSpeedLevel", value:25 }],
+        targetMode: "cell",
+        range: 1,
+        requireWeapon: true,
+        weaponMult: 1.0,
+        hits: 2
+    },
+
+    sweep: {
+        name: "横扫",
+        cost: [{ res:"RemainSpeedLevel", value:30 }],
+        targetMode: "cell",
+        range: 1,
+        requireWeapon: true,
+        weaponMult: 0.7,
+        aoeRadius: 1,          /* 以目标格为中心半径1(3x3)范围内敌人 */
+        hits: 1
+    },
+
+    thrust: {
+        name: "突刺",
+        cost: [{ res:"RemainSpeedLevel", value:30 }],
+        targetMode: "thrust",  /* 直线冲撞 */
+        maxDistance: 5,
+        requireWeapon: true,
+        weaponMult: 1.5,
+        hits: 1
+    },
+
+    guard: {
+        name: "格挡",
+        cost: [{ res:"RemainSpeedLevel", value:20 }],
+        targetMode: "self",
+        applyBuffs: [{ buffId:"guarding", duration:2 }]
+    },
+
+    climb: {
+        name: "攀爬",
+        cost: [{ res:"RemainSpeedLevel", value:25 }],
+        targetMode: "climb"    /* 无视地势限制移动一格 */
+    },
+
+    bodySlam: {
+        name: "撞击",
+        cost: [{ res:"RemainSpeedLevel", value:10 }],
+        targetMode: "cell"
+    }
+}>>

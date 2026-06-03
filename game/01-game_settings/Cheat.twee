@@ -1,0 +1,369 @@
+:: Cheat Menu [nobr noreturn]
+<h2>作弊菜单</h2>
+当前玩家：<<= $Player.name>>　Lv<<= $Player.level>>　Exp<<= $Player.exp>>　自由点<<= $Player.freePoints !== undefined ? $Player.freePoints : 0>><br>
+HP <<= $Player.RemainHP>>/<<= $Player.maxHP>>　MP <<= $Player.RemainMP>>/<<= $Player.maxMP>><br>
+atk<<= $Player.atk>>　MagicLv<<= $Player.MagicLevel>>　SpeedLv<<= $Player.SpeedLevel>>　先攻<<= $Player.initiative>><br>
+法术：
+<<if $Player.spell.length === 0>>无<<else>>
+  <<for _cmS = 0; _cmS < $Player.spell.length; _cmS++>>
+    <<= $SpellLibrary[$Player.spell[_cmS]].name>><<if _cmS < $Player.spell.length - 1>>、<</if>>
+  <</for>>
+<</if>><br>
+法阵：
+<<if not $Player.formation || $Player.formation.length === 0>>无<<else>>
+  <<for _cmF = 0; _cmF < $Player.formation.length; _cmF++>>
+    <<= $FormationLibrary[$Player.formation[_cmF]].name>><<if _cmF < $Player.formation.length - 1>>、<</if>>
+  <</for>>
+<</if>><br>
+武器：<<= $Player.weapon ? $Player.weapon.name : "无">><br>
+<hr>
+<<link "改属性">><<goto "Cheat Stats">><</link>><br>
+<<link "改等级/经验">><<goto "Cheat Level">><</link>><br>
+<<link "管理剑技">><<goto "Cheat Skill">><</link>><br>
+<<link "管理法术">><<goto "Cheat Spell">><</link>><br>
+<<link "管理法阵">><<goto "Cheat Formation">><</link>><br>
+<<link "管理武器">><<goto "Cheat Weapon">><</link>><br>
+<<link "管理道具">><<goto "Cheat Item">><</link>><br>
+<<link "回满状态">>
+  <<set $Player.RemainHP = $Player.maxHP>>
+  <<set $Player.RemainMP = $Player.maxMP>>
+  <<set $Player.status = "alive">>
+  <<goto "Cheat Menu">>
+<</link>><br>
+<<link "发起测试战斗">><<goto "Cheat Battle Setup">><</link>><br>
+<hr>
+<<link "返回游戏">><<goto $return>><</link>>
+
+
+
+
+:: Cheat Stats [noreturn nobr]
+<<cheatTargetPlayer>>
+<h3>属性</h3>
+<<if $Units && $Units.length > 0 && _cheatTarget.originId === "player">>
+  <em>（战斗中，修改即时生效）</em><br>
+<</if>>
+<<set _cs = [
+  ["maxHP","生命上限",10],
+  ["RemainHP","当前HP",10],
+  ["maxMP","魔力上限",10],
+  ["RemainMP","当前MP",10],
+  ["atk","攻击",1],
+  ["MagicLevel","魔力等级",1],
+  ["SpeedLevel","速度等级",1],
+  ["initiative","先攻",1]
+]>>
+<<for _csI = 0; _csI < _cs.length; _csI++>>
+  <<set _csKey = _cs[_csI][0]>>
+  <<set _csName = _cs[_csI][1]>>
+  <<set _csStep = _cs[_csI][2]>>
+  <<set _csNeg = -_csStep>>
+  <<set _csBig = _csStep * 10>>
+  <<set _csBigNeg = -(_csStep * 10)>>
+  <<= _csName>>：<<= _cheatTarget[_csKey]>>
+  <<capture _csKey, _csStep, _csNeg, _csBig, _csBigNeg>>
+    <<link "−">><<cheatSetStat _csKey _csNeg>><<goto "Cheat Stats">><</link>>
+    <<link "+">><<cheatSetStat _csKey _csStep>><<goto "Cheat Stats">><</link>>
+    <<link "×10−">><<cheatSetStat _csKey _csBigNeg>><<goto "Cheat Stats">><</link>>
+    <<link "×10+">><<cheatSetStat _csKey _csBig>><<goto "Cheat Stats">><</link>>
+  <</capture>>
+  <br>
+<</for>>
+<hr>
+抗性：
+<<set _csR = [["physical","物理"],["magical","魔法"],["fire","火"],["ice","冰"]]>>
+<<for _csI = 0; _csI < _csR.length; _csI++>>
+  <<set _csRKey = _csR[_csI][0]>>
+  <<set _csRName = _csR[_csI][1]>>
+  <br><<= _csRName>>抗：<<= _cheatTarget.res[_csRKey]>>%
+  <<capture _csRKey>>
+    <<link "−10">><<cheatSetRes _csRKey (-10)>><<goto "Cheat Stats">><</link>>
+    <<link "+10">><<cheatSetRes _csRKey 10>><<goto "Cheat Stats">><</link>>
+  <</capture>>
+<</for>>
+<hr>
+<<link "返回">><<goto "Cheat Menu">><</link>>
+
+
+
+:: Cheat Level [nobr noreturn]
+<h3>等级/经验</h3>
+等级：<<= $Player.level>>　经验：<<= $Player.exp>>　自由点：<<= $Player.freePoints !== undefined ? $Player.freePoints : 0>><br>
+<hr>
+经验
+<<link "+10">><<set $Player.exp += 10>><<cheatSyncArrays>><<goto "Cheat Level">><</link>>
+<<link "+100">><<set $Player.exp += 100>><<cheatSyncArrays>><<goto "Cheat Level">><</link>>
+<<link "+1000">><<set $Player.exp += 1000>><<cheatSyncArrays>><<goto "Cheat Level">><</link>><br>
+<<link "立即结算升级（调checkLevelUp）">>
+  <<checkLevelUp $Player>>
+  <<cheatSyncArrays>>
+  <<goto "Cheat Level">>
+<</link>><br>
+<hr>
+等级直接设
+<<link "−1">><<if $Player.level > 1>><<set $Player.level -= 1>><</if>><<cheatSyncArrays>><<goto "Cheat Level">><</link>>
+<<link "+1">><<set $Player.level += 1>><<cheatSyncArrays>><<goto "Cheat Level">><</link>><br>
+<<link "+10自由点">>
+  <<if $Player.freePoints === undefined>><<set $Player.freePoints = 0>><</if>>
+  <<set $Player.freePoints += 10>>
+  <<cheatSyncArrays>>
+  <<goto "Cheat Level">>
+<</link>>
+<<link "去分配自由点">><<goto "Level Up Allocate">><</link>><br>
+<hr>
+<<link "返回">><<goto "Cheat Menu">><</link>>
+
+
+:: Cheat Spell [nobr noreturn]
+<h3>法术</h3>
+<<if not $SpellLibrary>>
+  $SpellLibrary 未初始化（先进入一次战斗或手动设置）。<br>
+<<else>>
+  已习得：
+<<if $Player.spell.length === 0>>无<<else>>
+  <<for _csp = 0; _csp < $Player.spell.length; _csp++>>
+    <<= $SpellLibrary[$Player.spell[_csp]].name>><<if _csp < $Player.spell.length - 1>>、<</if>>
+  <</for>>
+<</if>><br>
+
+  <<set _csKeys = Object.keys($SpellLibrary)>>
+  <<for _csI = 0; _csI < _csKeys.length; _csI++>>
+    <<set _csK = _csKeys[_csI]>>
+    <<set _csHas = $Player.spell.indexOf(_csK) !== -1>>
+    <<= $SpellLibrary[_csK].name>>（<<= _csK>>）
+    <<capture _csK, _csHas>>
+      <<if _csHas>>
+        <<link "移除">>
+          <<set $Player.spell.deleteAt($Player.spell.indexOf(_csK))>>
+          <<cheatSyncArrays>>
+          <<goto "Cheat Spell">>
+        <</link>>
+      <<else>>
+        <<link "习得">>
+          <<run $Player.spell.push(_csK)>>
+          <<cheatSyncArrays>>
+          <<goto "Cheat Spell">>
+        <</link>>
+      <</if>>
+    <</capture>>
+    <br>
+  <</for>>
+<</if>>
+<hr>
+<<link "返回">><<goto "Cheat Menu">><</link>>
+
+
+:: Cheat Weapon [nobr noreturn]
+<h3>武器</h3>
+<<cheatTargetPlayer>>
+当前：<<= _cheatTarget.weapon ? _cheatTarget.weapon.name : "空手">><br><hr>
+<<set _cwKeys = Object.keys($WeaponLibrary)>>
+<<for _cwI = 0; _cwI < _cwKeys.length; _cwI++>>
+  <<set _cwK = _cwKeys[_cwI]>>
+  <<set _cwW = $WeaponLibrary[_cwK]>>
+  <<= _cwW.name>>（基础<<= _cwW.baseValue>>+atk<<if _cwW.range > 1>>，射程<<= _cwW.range>><</if>>）
+  <<capture _cwK>>
+    <<link "装备">>
+      <<set $Player.weapon = clone($WeaponLibrary[_cwK])>>
+      <<cheatSyncArrays>>
+      <<goto "Cheat Weapon">>
+    <</link>>
+  <</capture>>
+  <br>
+<</for>>
+
+<<link "卸下武器">>
+  <<set $Player.weapon = clone($WeaponLibrary.unarmed)>>
+  <<cheatSyncArrays>>
+  <<goto "Cheat Weapon">>
+<</link>><br>
+
+<hr>
+<<link "返回">><<goto "Cheat Menu">><</link>>
+
+
+:: Cheat Formation [nobr noreturn]
+<h3>法阵</h3>
+<<if not $FormationLibrary>>
+  $FormationLibrary 未初始化。<br>
+<<else>>
+  已习得：
+  <<if not $Player.formation>><<set $Player.formation = []>><</if>>
+  <<if not $Player.formation || $Player.formation.length === 0>>无<<else>>
+  <<for _cmF = 0; _cmF < $Player.formation.length; _cmF++>>
+    <<= $FormationLibrary[$Player.formation[_cmF]].name>><<if _cmF < $Player.formation.length - 1>>、<</if>>
+  <</for>>
+<</if>><br>
+  <<set _cfKeys = Object.keys($FormationLibrary)>>
+  <<for _cfI = 0; _cfI < _cfKeys.length; _cfI++>>
+    <<set _cfK = _cfKeys[_cfI]>>
+    <<set _cfHas = $Player.formation.indexOf(_cfK) !== -1>>
+    <<= $FormationLibrary[_cfK].name>>（<<= _cfK>>）
+    <<capture _cfK, _cfHas>>
+      <<if _cfHas>>
+        <<link "移除">>
+          <<set $Player.formation.deleteAt($Player.formation.indexOf(_cfK))>>
+          <<cheatSyncArrays>>
+          <<goto "Cheat Formation">>
+        <</link>>
+      <<else>>
+        <<link "习得">>
+          <<run $Player.formation.push(_cfK)>>
+          <<cheatSyncArrays>>
+          <<goto "Cheat Formation">>
+        <</link>>
+      <</if>>
+    <</capture>>
+    <br>
+  <</for>>
+<</if>>
+<hr>
+<<link "返回">><<goto "Cheat Menu">><</link>>
+
+
+:: Cheat Item [nobr noreturn]
+<h3>道具</h3>
+<<if not $ArtificeLibrary>>
+  $ArtificeLibrary 未初始化。<br>
+<<else>>
+  <<if not $Player.items>><<set $Player.items = []>><</if>>
+  当前持有：
+  <<if $Player.items.length === 0>>无<<else>>
+    <<for _ciI = 0; _ciI < $Player.items.length; _ciI++>>
+      <<= $ArtificeLibrary[$Player.items[_ciI].id].name>>×<<= $Player.items[_ciI].count>>
+      <<if _ciI < $Player.items.length - 1>>、<</if>>
+    <</for>>
+  <</if>>
+  <br><hr>
+  <<set _ciKeys = Object.keys($ArtificeLibrary)>>
+  <<for _ciI = 0; _ciI < _ciKeys.length; _ciI++>>
+    <<set _ciK = _ciKeys[_ciI]>>
+    <<= $ArtificeLibrary[_ciK].name>>（<<= _ciK>>）
+    <<capture _ciK>>
+      <<link "+1">>
+        <<set _found = false>>
+        <<for _add = 0; _add < $Player.items.length; _add++>>
+          <<if $Player.items[_add].id === _ciK>>
+            <<set $Player.items[_add].count += 1>>
+            <<set _found = true>>
+            <<break>>
+          <</if>>
+        <</for>>
+        <<if not _found>>
+          <<run $Player.items.push({ id:_ciK, count:1 })>>
+        <</if>>
+        <<cheatSyncArrays>>
+        <<goto "Cheat Item">>
+      <</link>>
+      <<link "+10">>
+        <<set _found = false>>
+        <<for _add = 0; _add < $Player.items.length; _add++>>
+          <<if $Player.items[_add].id === _ciK>>
+            <<set $Player.items[_add].count += 10>>
+            <<set _found = true>>
+            <<break>>
+          <</if>>
+        <</for>>
+        <<if not _found>>
+          <<run $Player.items.push({ id:_ciK, count:10 })>>
+        <</if>>
+        <<cheatSyncArrays>>
+        <<goto "Cheat Item">>
+      <</link>>
+    <</capture>>
+    <br>
+  <</for>>
+  <hr>
+  <<link "清空道具">><<set $Player.items = []>><<cheatSyncArrays>><<goto "Cheat Item">><</link>>
+<</if>>
+<hr>
+<<link "返回">><<goto "Cheat Menu">><</link>>
+
+
+
+:: Cheat Skill [nobr noreturn]
+<h3>剑技</h3>
+<<if not $SkillLibrary>>
+  $SkillLibrary 未初始化。<br>
+<<else>>
+  <<if not $Player.skill>><<set $Player.skill = []>><</if>>
+  已习得：
+  <<if $Player.skill.length === 0>>无<<else>>
+    <<for _csk = 0; _csk < $Player.skill.length; _csk++>>
+      <<= $SkillLibrary[$Player.skill[_csk]].name>><<if _csk < $Player.skill.length - 1>>、<</if>>
+    <</for>>
+  <</if>><br><hr>
+  <<set _cskKeys = Object.keys($SkillLibrary)>>
+  <<for _cskI = 0; _cskI < _cskKeys.length; _cskI++>>
+    <<set _cskK = _cskKeys[_cskI]>>
+    <<set _cskHas = $Player.skill.indexOf(_cskK) !== -1>>
+    <<= $SkillLibrary[_cskK].name>>（<<= _cskK>>）
+    <<capture _cskK, _cskHas>>
+      <<if _cskHas>>
+        <<link "移除">><<set $Player.skill.deleteAt($Player.skill.indexOf(_cskK))>><<cheatSyncArrays>><<goto "Cheat Skill">><</link>>
+      <<else>>
+        <<link "习得">><<run $Player.skill.push(_cskK)>><<cheatSyncArrays>><<goto "Cheat Skill">><</link>>
+      <</if>>
+    <</capture>>
+    <br>
+  <</for>>
+<</if>>
+<hr>
+<<link "返回">><<goto "Cheat Menu">><</link>>
+
+
+:: Cheat Battle Setup [nobr noreturn]
+<h3>测试战斗</h3>
+
+当前地形：<strong><<= $CheatTerrain>></strong><br>
+<<set _terrains = [["plain","平原"],["mountain","山地"],["volcano","火山"],["river","河流"],["forest","森林"],["lowland","洼地"],["slope","山坡"],["plateau","高台地"],["basin","壶口"]]>>
+<<for _ctI = 0; _ctI < _terrains.length; _ctI++>>
+  <<set _ctKey = _terrains[_ctI][0]>>
+  <<set _ctName = _terrains[_ctI][1]>>
+  <<capture _ctKey>>
+    <<link _ctName>><<set $CheatTerrain = _ctKey>><<goto "Cheat Battle Setup">><</link>>
+  <</capture>>
+  <<if _ctI < _terrains.length - 1>> | <</if>>
+<</for>>
+<hr>
+
+<<if $MapLibrary>>
+  <br>或选择固定地图：<br>
+  <<set _fmKeys = Object.keys($MapLibrary)>>
+  <<for _fmI = 0; _fmI < _fmKeys.length; _fmI++>>
+    <<set _fmK = _fmKeys[_fmI]>>
+    <<set _fmName = $MapLibrary[_fmK].name || _fmK>>
+    <<capture _fmK, _fmName>>
+      <<link _fmName>>
+        <<set $CheatUseFixedMap = _fmK>>
+        <<goto "Cheat Battle Setup">>
+      <</link>>
+    <</capture>>
+    <br>
+  <</for>>
+  <<if $CheatUseFixedMap>>
+    当前选择：<strong><<= $MapLibrary[$CheatUseFixedMap].name || $CheatUseFixedMap>></strong>
+    <<link "清除（用随机地形）">><<set $CheatUseFixedMap = "">><<goto "Cheat Battle Setup">><</link>>
+  <</if>>
+<</if>>
+<br>
+<br>
+
+<<link "打1只哥布林">>
+  <<setupCheatBattle 1 false>>
+<</link>><br>
+<<link "打3只哥布林">>
+  <<setupCheatBattle 3 false>>
+<</link>><br>
+<<link "打1只敌法师(会治疗/AOE)">>
+  <<setupCheatBattle 1 true>>
+<</link>><br>
+<<link "援军测试(30tick后弓手加入)">>
+  <<goto "Reinforcement Test">>
+<</link>><br>
+<<link "测试商人(只会投药水/火弹)">>
+  <<setupCheatMerchant>>
+<</link>><br>
+
+<hr>
+<<link "返回">><<goto "Cheat Menu">><</link>>

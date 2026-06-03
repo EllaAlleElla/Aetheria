@@ -1,114 +1,3917 @@
 :: Battle Widgets [widget nobr]
-<<widget "castSpell">>
-  <<set _spell = $SpellLibrary[_args[0]]>>
-  <<set _chosen = _args[1]>>
-  <<set _caster = _args[2]>>
-  <<set _CastingLevel = _args[3]>>
-  
-  <<for _j = 0; _j < _spell.effects.length; _j++>>
-    <<set _eff = _spell.effects[_j]>>
-    <<set _realTarget = (_eff.target === "caster") ? _caster : _chosen>>
-    <<if _eff.scaling === "CastingLevel">>
-      <<set _realValue = _eff.value * _CastingLevel>>
-    <<elseif _eff.scaling>>
-      <<set _realValue = _eff.value * _caster[_eff.scaling]>>
-    <<else>>
-      <<set _realValue = _eff.value>>
-    <</if>>
+
+/*
+  spawnUnit：创建并加入一个战斗单位。
+  用法：<<spawnUnit { ...部分字段... }>>
+  传入对象会覆盖默认值；未传字段使用默认。
+  id 若不传则自动生成。
+*/
+<<widget "spawnUnit">>
+  <<set _o = _args[0]>>
+
+  /* 自动 id */
+  <<set $UnitIdCounter += 1>>
+  <<set _autoId = "u" + $UnitIdCounter>>
+
+  /* 默认单位模板 */
+  <<set _unit = {
+      id: _autoId,
+      name: "未命名单位",
+      side: "enemy",
+      isPlayer: false,
+      category: "monster",
+      traits: [],
+      species: "",
+      special: [],
+      special: [],
+      status: "active",
+
+      /* 存量 */
+      RemainHP: 100,
+      RemainMP: 100,
+      RemainMagicLevel: 10,
+      RemainSpeedLevel: 10,
+      gauge: 0,
+      turnCount: 0,
 
 
-    <<if _eff.type === "RemainHP">>
-      <<set _realTarget.RemainHP += _realValue>>
-    <<elseif _eff.type === "hp">>
-      <<set _realTarget.hp += _realValue>>
-    <<elseif _eff.type === "atk">>
-      <<set _realTarget.atk += _realValue>>
-    <<elseif _eff.type === "RemainMP">>
-      <<set _realTarget.RemainMP += _realValue>>
-    <<elseif _eff.type === "mp">>
-      <<set _realTarget.mp += _realValue>>
-    <<elseif _eff.type === "MagicLevel">>
-      <<set _realTarget.MagicLevel += _realValue>>
-    <<elseif _eff.type === "SpeedLevel">>
-      <<set _realTarget.SpeedLevel += _realValue>>
-    <<elseif _eff.type === "RemainMagicLevel">>
-      <<set _realTarget.RemainMagicLevel += _realValue>>
-    <<elseif _eff.type === "RemainSpeedLevel">>
-      <<set _realTarget.RemainSpeedLevel += _realValue>>
-    <<elseif _eff.type === "status">>
-      <<set _realTarget.status = _eff.value>>
-    <</if>>
-  <</for>>
-  <<= _caster.name>>对<<= _chosen.name>>释放了<<= _spell.name>>。
+      /* 基础值（最终值由 stat 实时算） */
+      maxHP: 100,
+      maxMP: 100,
+      MagicLevel: 10,
+      SpeedLevel: 10,
+      atk: 5,
+      initiative: 10,
+      res: { physical: 0, magical: 0, fire: 0, ice: 0 },
+
+      /* 能力 */
+      spell: [],
+      weapon: null,
+      pos: null,
+
+      /* 状态 */
+      buff: [],
+
+      /* 经验 */
+      level: 1,
+      expOverride: null,
+
+      /* 显示文本 */
+      ShownGender: "它",
+      ShownHP: "未知",
+      ShownATK: "未知",
+      ShownMP: "未知",
+      ShownLV: "未知"
+  }>>
+
+  /* 用传入对象覆盖默认字段 */
+  <<if _o>>
+    <<run Object.keys(_o).forEach(function(k){ _unit[k] = _o[k]; })>>
+  <</if>>
+
+  /* 若调用方未指定 RemainHP/RemainMP，则默认满状态 */
+  <<if _o && _o.maxHP !== undefined && _o.RemainHP === undefined>>
+    <<set _unit.RemainHP = _unit.maxHP>>
+  <</if>>
+  <<if _o && _o.maxMP !== undefined && _o.RemainMP === undefined>>
+    <<set _unit.RemainMP = _unit.maxMP>>
+  <</if>>
+
+  /* 无武器兜底为空手 */
+  <<if _unit.weapon === null || _unit.weapon === undefined>>
+    <<set _unit.weapon = { name:"空手", wtype:"unarmed", damageType:"physical", element:"none", baseValue:2, scaling:"atk", range:1, speedCost:10 }>>
+  <</if>>
+
+  <<run $Units.push(_unit)>>
+
 <</widget>>
 
-<<widget "checkBattleEnd">>
-  <<set _anyActive = false>>
-  <<for _i = 0; _i < $Enemy.length; _i++>>
-    <<if $Enemy[_i].status === "active">>
-      <<set _anyActive = true>>
-    <</if>>
-  <</for>>
-  <<set _PlayerAlive = $Player.status === "active">>
-  <<if not _anyActive>>
-    <<set $Enemy = []>>
-    <<goto $BattleWin>>
-  <<elseif not _PlayerAlive>>
-    <<set $Enemy = []>>
-    <<goto $BattleLose>>
+
+/*
+  findUnit：按 id 查找单位，结果放在 _foundUnit（找不到为 null）。
+  用法：<<findUnit "u1">> 然后用 _foundUnit
+*/
+<<widget "findUnit">>
+  <<set _foundUnit = $Units.find(function(u){ return u.id === _args[0]; }) || null>>
+<</widget>>
+
+
+/*
+  canControl：判断单位是否可被玩家手动操作，结果放 _canControl。
+*/
+<<widget "canControl">>
+  <<set _u = _args[0]>>
+  <<if _u.isPlayer>>
+    <<set _canControl = true>>
+  <<elseif _u.side === "ally" && $Settings.controlAllies>>
+    <<set _canControl = true>>
+  <<else>>
+    <<set _canControl = false>>
   <</if>>
 <</widget>>
 
-<<widget "showEnemyInfo">>
-你看见一共有$EnemyCount个敌人。
-    <br>
-    <<for _i = 0; _i < $EnemyCount; _i++>>
-      <<if $Enemy[_i].status !== "active">>
-        <<= $Enemy[_i].name>>已经倒下了。
-      <<else>>
-        <<= $Enemy[_i].name>>是第<<= _i + 1>>个敌人。看起来大概<<= $Enemy[_i].ShownLV>>级，有大概<<= $Enemy[_i].ShownATK>>点攻击力、<<= $Enemy[_i].ShownHP>>点hp和<<= $Enemy[_i].ShownMP>>点mp。
-        <<set _hpRatio = $Enemy[_i].RemainHP / $Enemy[_i].hp>>
-        <<if _hpRatio > 0.8>>
-          <<= $Enemy[_i].ShownGender>>看起来状态良好。
-        <<elseif _hpRatio > 0.5>>
-          <<= $Enemy[_i].ShownGender>>看起来有些疲态。
-        <<elseif _hpRatio > 0.25>>
-          <<= $Enemy[_i].ShownGender>>的伤势相当严重。
-        <<else>>
-          <<= $Enemy[_i].ShownGender>>已经岌岌可危。
-        <</if>>
-      <</if>>
-      <br>
-    <</for>>
+
+/*
+  isLethal：判断单位归零时是否致命(dead)，结果放 _isLethal。
+  优先级：special含noKill → 非致命；否则玩家方看设置，敌方看自身。
+*/
+<<widget "isLethal">>
+  <<set _u = _args[0]>>
+  <<if _u.special.indexOf("noKill") !== -1>>
+    <<set _isLethal = false>>
+  <<elseif _u.side === "ally">>
+    <<set _isLethal = $Settings.allowLethal>>
+  <<else>>
+    <<set _isLethal = true>>
+  <</if>>
 <</widget>>
 
-<<widget "canCastSpell">>
-  /* _args[0]：法术数据（_spellData），_args[1]：施法者对象，_args[2]：CastingLevel */
-  <<set _checkSpell = _args[0]>>
-  <<set _checkCaster = _args[1]>>
-  <<set _checkCastingLevel = _args[2]>>
-  <<set _canCast = true>>
+/*
+  stat：计算单位某属性的最终值（基础值 + 所有 snapshot buff 修正）。
+  结果放 _stat。
+  注意：护盾(shield)不计入任何属性，单独由 totalShield 处理。
+  res(抗性)是对象，不能用本widget；抗性单独在 applyDamage 内联计算。
+  用法：<<stat $Units[0] "atk">> 然后用 _stat
+*/
+<<widget "stat">>
+  <<set _statU = _args[0]>>
+  <<set _statName = _args[1]>>
+  <<set _val = _statU[_statName]>>
 
-  <<for _c = 0; _c < _checkSpell.effects.length; _c++>>
-    <<set _eff = _checkSpell.effects[_c]>>
-    <<if _eff.target === "caster" && _eff.value < 0>>
-      <<if _eff.scaling === "CastingLevel">>
-        <<set _realCost = Math.abs(_eff.value * _checkCastingLevel)>>
-      <<elseif _eff.scaling>>
-        <<set _realCost = Math.abs(_eff.value * _checkCaster[_eff.scaling])>>
-      <<else>>
-        <<set _realCost = Math.abs(_eff.value)>>
+  <<for _statB = 0; _statB < _statU.buff.length; _statB++>>
+    <<set _statInst = _statU.buff[_statB]>>
+    <<set _statDef = $BuffLibrary[_statInst.id]>>
+    <<if _statDef && _statDef.apply.indexOf("snapshot") !== -1>>
+      <<for _statE = 0; _statE < _statDef.effects.length; _statE++>>
+        <<set _statEff = _statDef.effects[_statE]>>
+        <<if _statEff.stat === _statName>>
+          <<if _statEff.scaling === "stack">>
+            <<set _val += _statEff.value * _statInst.stack>>
+          <<else>>
+            <<set _val += _statEff.value>>
+          <</if>>
+        <</if>>
+      <</for>>
+    <</if>>
+  <</for>>
+
+  <<set _stat = _val>>
+<</widget>>
+
+
+
+/*
+  statRes：计算单位对某伤害类别/元素的最终抗性百分比
+  （基础 res + snapshot buff 中针对该 res key 的修正）。
+  结果放 _resVal。key 例："physical" / "magical" / "fire" / "ice"。
+  buff 修正抗性的效果写法：{ stat:"res.fire", value:30, scaling:... }
+*/
+<<widget "statRes">>
+  <<set _srU = _args[0]>>
+  <<set _srKey = _args[1]>>
+  <<set _val = (_srU.res && _srU.res[_srKey] !== undefined) ? _srU.res[_srKey] : 0>>
+
+  <<for _srB = 0; _srB < _srU.buff.length; _srB++>>
+    <<set _srInst = _srU.buff[_srB]>>
+    <<set _srDef = $BuffLibrary[_srInst.id]>>
+    <<if _srDef && _srDef.apply.indexOf("snapshot") !== -1>>
+      <<for _srE = 0; _srE < _srDef.effects.length; _srE++>>
+        <<set _srEff = _srDef.effects[_srE]>>
+        <<if _srEff.stat === "res." + _srKey>>
+          <<if _srEff.scaling === "stack">>
+            <<set _val += _srEff.value * _srInst.stack>>
+          <<else>>
+            <<set _val += _srEff.value>>
+          <</if>>
+        <</if>>
+      <</for>>
+    <</if>>
+  <</for>>
+
+  <<set _resVal = _val>>
+<</widget>>
+
+
+
+/*
+  totalShield：汇总单位所有护盾buff的剩余护盾值，结果放 _totalShield。
+*/
+<<widget "totalShield">>
+  <<set _u = _args[0]>>
+  <<set _sum = 0>>
+  <<for _b = 0; _b < _u.buff.length; _b++>>
+    <<if _u.buff[_b].shield !== null && _u.buff[_b].shield !== undefined>>
+      <<set _sum += _u.buff[_b].shield>>
+    <</if>>
+  <</for>>
+  <<set _totalShield = _sum>>
+<</widget>>
+
+
+/*
+  applyDamage：对目标施加一个伤害包。
+  _args[0] = 目标单位
+  _args[1] = 伤害包 packet：
+    {
+      amount,                  正数=伤害量(扣血)，负数=治疗(回血)
+      damageType,              "physical" | "magical" | "true"
+      element,                 "none" | "fire" | "ice" | ...
+      tags,                    命中后用于解buff的标签数组（阶段2接入removeBuffByTag）
+      vsType,                  可选，{ monster:1.5, ... } 特攻倍率
+      canKill                  是否致命（默认true），false则伤害最多把目标打到1血
+    }
+  结果摘要放 _dmgResult：{ dealt, shieldAbsorbed, killed }
+  注意：本阶段先不调用 removeBuffByTag（阶段2写好后接入）。
+*/
+<<widget "applyDamage">>
+  <<set _t = _args[0]>>
+  <<set _p = _args[1]>>
+  <<set _atkUnit = _args[2] || null>>
+
+  /* 已倒下的单位不再受伤 */
+  <<if _t.status !== "active">>
+    <<set _dmgResult = { dealt:0, shieldAbsorbed:0, killed:false }>>
+  <<else>>
+
+    /* ---- 治疗分支：amount<0 直接回血，不走抗性/护盾 ---- */
+    <<if _p.amount < 0>>
+      <<stat _t "maxHP">>
+      <<set _heal = Math.abs(_p.amount)>>
+      <<set _t.RemainHP = Math.min(_t.RemainHP + _heal, _stat)>>
+      <<set _dmgResult = { dealt:-_heal, shieldAbsorbed:0, killed:false }>>
+    <<else>>
+
+      /* ---- 伤害分支 ---- */
+      <<set _raw = _p.amount>>
+
+      /* 抗性：true伤害无视抗性 */
+      <<if _p.damageType !== "true">>
+        <<statRes _t _p.damageType>>
+        <<set _raw = _raw * (1 - _resVal / 100)>>
+        <<if _p.element && _p.element !== "none">>
+          <<statRes _t _p.element>>
+          <<set _raw = _raw * (1 - _resVal / 100)>>
+        <</if>>
       <</if>>
 
-      <<if _eff.type === "RemainMagicLevel" && _checkCaster.RemainMagicLevel < _realCost>>
-        <<set _canCast = false>>
-      <<elseif _eff.type === "RemainMP" && _checkCaster.RemainMP < _realCost>>
-        <<set _canCast = false>>
-      <<elseif _eff.type === "RemainHP" && _checkCaster.RemainHP < _realCost>>
-        <<set _canCast = false>>
-      <<elseif _eff.type === "RemainSpeedLevel" && _checkCaster.RemainSpeedLevel < _realCost>>
-        <<set _canCast = false>>
+      /* 特攻倍率 */
+      <<if _p.vsType && _t.category && _p.vsType[_t.category] !== undefined>>
+        <<set _raw = _raw * _p.vsType[_t.category]>>
+      <</if>>
+
+      /* 不为负，取整 */
+      <<if _raw < 0>><<set _raw = 0>><</if>>
+      <<set _final = Math.round(_raw)>>
+
+      /* 护盾吸收：后施加先扣（从buff数组末尾向前） */
+      <<set _absorbed = 0>>
+      <<set _remaining = _final>>
+      <<for _b = _t.buff.length - 1; _b >= 0; _b-->>
+        <<set _inst = _t.buff[_b]>>
+        <<if _inst.shield !== null && _inst.shield !== undefined && _remaining > 0>>
+          <<if _inst.shield >= _remaining>>
+            <<set _inst.shield -= _remaining>>
+            <<set _absorbed += _remaining>>
+            <<set _remaining = 0>>
+          <<else>>
+            <<set _absorbed += _inst.shield>>
+            <<set _remaining -= _inst.shield>>
+            <<set _inst.shield = 0>>
+          <</if>>
+        <</if>>
+      <</for>>
+
+      /* 移除已耗尽的护盾buff */
+      <<set _t.buff = _t.buff.filter(function(bf){
+        return !(bf.shield !== null && bf.shield !== undefined && bf.shield <= 0);
+      })>>
+
+      /* 扣血 */
+      <<set _t.RemainHP -= _remaining>>
+
+      /* 格挡反击：目标有counter buff则反弹给攻击者 */
+      <<if _atkUnit && _atkUnit.status === "active" && _remaining > 0>>
+        <<set _counterRate = 0>>
+        <<for _cb = 0; _cb < _t.buff.length; _cb++>>
+          <<set _cbDef = $BuffLibrary[_t.buff[_cb].id]>>
+          <<if _cbDef && _cbDef.counter>>
+            <<if _cbDef.counter > _counterRate>><<set _counterRate = _cbDef.counter>><</if>>
+          <</if>>
+        <</for>>
+        <<if _counterRate > 0>>
+          <<set _counterDmg = Math.round(_remaining * _counterRate)>>
+          <<if _counterDmg > 0>>
+            <<set _atkUnit.RemainHP -= _counterDmg>>
+            <<if _atkUnit.RemainHP < 0>><<set _atkUnit.RemainHP = 0>><</if>>
+            /* 反击不递归触发反击；不走护盾(简化) */
+          <</if>>
+        <</if>>
+      <</if>>
+
+
+      /* 命中解buff：用伤害包tags解除目标对应buff */
+      <<if _p.tags && _p.tags.length > 0>>
+        <<removeBuffByTag _t _p.tags>>
+      <</if>>
+
+
+      /* 致命/非致命判定 */
+      <<set _killed = false>>
+      <<if _t.RemainHP <= 0>>
+        /* canKill=false 的伤害不能击倒，保底留1血 */
+        <<if _p.canKill === false>>
+          <<set _t.RemainHP = 1>>
+        <<else>>
+          <<isLethal _t>>
+          <<if _isLethal>>
+            <<set _t.RemainHP = 0>>
+            <<set _t.status = "dead">>
+          <<else>>
+            <<set _t.RemainHP = 0>>
+            <<set _t.status = "defeated">>
+          <</if>>
+          <<set _killed = true>>
+        <</if>>
+      <</if>>
+
+      <<set _dmgResult = { dealt:_final, shieldAbsorbed:_absorbed, killed:_killed }>>
+    <</if>>
+  <</if>>
+<</widget>>
+
+/*
+  applyBuff：给目标施加一个buff，按模板的 stackRule 处理叠加。
+  _args[0] = 目标单位
+  _args[1] = 施加参数 spec：
+    {
+      buffId,                  指向 $BuffLibrary 的 key
+      duration,                持续值
+      durationType,            "selfTurns" | "globalTicks"（缺省随模板，再缺省selfTurns）
+      stackPerLevel,           每施法等级提供的层数（缺省1）
+      castingLevel,            施法等级（缺省1）
+      extraRemoveBy,           额外解除tag数组（缺省[]）
+      source,                  施加者id（缺省null）
+      shield                   护盾值（仅护盾类buff传，缺省null）
+    }
+*/
+<<widget "applyBuff">>
+  <<set _t = _args[0]>>
+  <<set _s = _args[1]>>
+  <<set _def = $BuffLibrary[_s.buffId]>>
+
+  <<if _def>>
+    /* 计算层数 */
+    <<set _spl = (_s.stackPerLevel !== undefined) ? _s.stackPerLevel : 1>>
+    <<set _cl = (_s.castingLevel !== undefined) ? _s.castingLevel : 1>>
+    <<set _newStack = _spl * _cl>>
+    <<if _newStack < 1>><<set _newStack = 1>><</if>>
+
+    /* 计算计时类型 */
+    <<set _dType = _s.durationType || _def.durationType || "selfTurns">>
+
+    /* 组装新实例 */
+    <<set _inst = {
+        id: _s.buffId,
+        duration: _s.duration,
+        durationType: _dType,
+        stack: _newStack,
+        extraRemoveBy: _s.extraRemoveBy || [],
+        source: (_s.source !== undefined) ? _s.source : null,
+        shield: (_s.shield !== undefined) ? _s.shield : null
+    }>>
+
+    <<set _rule = _def.stackRule || "refresh">>
+
+    /* 查找是否已存在同id实例 */
+    <<set _existIdx = -1>>
+    <<for _b = 0; _b < _t.buff.length; _b++>>
+      <<if _t.buff[_b].id === _s.buffId>>
+        <<set _existIdx = _b>>
+        <<break>>
+      <</if>>
+    <</for>>
+
+    <<switch _rule>>
+      <<case "stack" "independent">>
+        <<run _t.buff.push(_inst)>>
+
+      <<case "refresh">>
+        <<if _existIdx === -1>>
+          <<run _t.buff.push(_inst)>>
+        <<else>>
+          <<set _t.buff[_existIdx].duration = _inst.duration>>
+          <<set _t.buff[_existIdx].stack = _inst.stack>>
+          <<set _t.buff[_existIdx].durationType = _inst.durationType>>
+          <<set _t.buff[_existIdx].extraRemoveBy = _inst.extraRemoveBy>>
+        <</if>>
+
+      <<case "max">>
+        <<if _existIdx === -1>>
+          <<run _t.buff.push(_inst)>>
+        <<else>>
+          <<set _t.buff[_existIdx].duration = Math.max(_t.buff[_existIdx].duration, _inst.duration)>>
+          <<set _t.buff[_existIdx].stack = Math.max(_t.buff[_existIdx].stack, _inst.stack)>>
+        <</if>>
+
+      <<case "ignore">>
+        <<if _existIdx === -1>>
+          <<run _t.buff.push(_inst)>>
+        <</if>>
+
+      <<default>>
+        <<run _t.buff.push(_inst)>>
+    <</switch>>
+  <</if>>
+<</widget>>
+
+
+/*
+  removeBuffByTag：受到带某些tag的攻击/效果时，解除符合解除条件的buff。
+  _args[0] = 目标单位
+  _args[1] = tag数组（如 ["fire","physical"]）
+  规则：buff的 removeBy(模板) ∪ extraRemoveBy(实例) 与传入tag有交集则移除。
+  护盾buff不在此移除（护盾靠扣光自动消失）。
+*/
+<<widget "removeBuffByTag">>
+  <<set _t = _args[0]>>
+  <<set _tags = _args[1]>>
+  <<if not _tags>><<set _tags = []>><</if>>
+
+  <<set _kept = []>>
+  <<for _b = 0; _b < _t.buff.length; _b++>>
+    <<set _inst = _t.buff[_b]>>
+    <<set _def = $BuffLibrary[_inst.id]>>
+
+    <<if not _def>>
+      /* 模板缺失，保留 */
+      <<run _kept.push(_inst)>>
+    <<else>>
+      /* 合并模板解除条件与实例附加解除条件 */
+      <<set _conds = (_def.removeBy || []).concat(_inst.extraRemoveBy || [])>>
+
+      /* 判断是否命中任一解除tag */
+      <<set _hit = false>>
+      <<for _c = 0; _c < _conds.length; _c++>>
+        <<if _tags.indexOf(_conds[_c]) !== -1>>
+          <<set _hit = true>>
+          <<break>>
+        <</if>>
+      <</for>>
+
+      /* 未命中则保留 */
+      <<if not _hit>>
+        <<run _kept.push(_inst)>>
+      <</if>>
+    <</if>>
+  <</for>>
+
+  <<set _t.buff = _kept>>
+<</widget>>
+
+
+
+
+/*
+  tickBuffs：推进某单位自身的buff计时（selfTurns类），并结算 perRound 效果(DOT等)。
+  应在该单位每次行动结束后调用。
+  - 先结算所有buff的 perRound 效果
+  - 再对 durationType==="selfTurns" 的buff duration-1
+  - duration<=0 的移除
+  globalTicks 类buff不在此处计时（由全局ATB推进，阶段4处理）。
+  _args[0] = 单位
+*/
+<<widget "tickBuffs">>
+  <<set _tbT = _args[0]>>
+
+  <<for _tbB = 0; _tbB < _tbT.buff.length; _tbB++>>
+    <<set _tbInst = _tbT.buff[_tbB]>>
+    <<set _tbDef = $BuffLibrary[_tbInst.id]>>
+    <<if _tbDef && _tbDef.perRound && _tbDef.perRound.length > 0>>
+      <<for _tbE = 0; _tbE < _tbDef.perRound.length; _tbE++>>
+        <<set _tbPr = _tbDef.perRound[_tbE]>>
+        <<set _tbAmt = _tbPr.value>>
+        <<if _tbPr.scaling === "stack">>
+          <<set _tbAmt = _tbPr.value * _tbInst.stack>>
+        <</if>>
+        <<applyDamage _tbT `{
+            amount: -_tbAmt,
+            damageType: _tbPr.damageType || "true",
+            element: _tbPr.element || "none",
+            tags: _tbPr.tags || [],
+            canKill: (_tbPr.canKill !== undefined) ? _tbPr.canKill : true
+        }`>>
+      <</for>>
+    <</if>>
+  <</for>>
+
+  <<set _tbT.buff = _tbT.buff.filter(function(inst){
+    if (inst.durationType === "selfTurns") {
+      inst.duration -= 1;
+      return inst.duration > 0;
+    }
+    return true;
+  })>>
+<</widget>>
+
+
+/*
+  canCast：检查施法者能否支付某法术在指定等级下的消耗。
+  _args[0] = 法术数据（$SpellLibrary[key]）
+  _args[1] = 施法者单位
+  _args[2] = castingLevel
+  结果放 _canCast（布尔）。
+  cost 项：{ res:"RemainMP", value:正数, scaling:"CastingLevel"|null }
+*/
+<<widget "canCast">>
+  <<set _spell = _args[0]>>
+  <<set _caster = _args[1]>>
+  <<set _cl = _args[2]>>
+  <<set _canCast = true>>
+
+  <<if not _spell>>
+    /* 法术数据缺失：视为不可施放，避免崩溃 */
+    <<set _canCast = false>>
+  <<else>>
+    <<if _spell.cost>>
+      <<for _c = 0; _c < _spell.cost.length; _c++>>
+        <<set _item = _spell.cost[_c]>>
+        <<if _item.scaling === "CastingLevel">>
+          <<set _need = _item.value * _cl>>
+        <<else>>
+          <<set _need = _item.value>>
+        <</if>>
+        <<if _caster[_item.res] < _need>>
+          <<set _canCast = false>>
+        <</if>>
+      <</for>>
+    <</if>>
+  <</if>>
+<</widget>>
+
+
+
+/*
+  payCost：扣除施法者的法术消耗（被 performAction 内部调用）。
+  _args[0]=法术数据 _args[1]=施法者 _args[2]=castingLevel
+*/
+<<widget "payCost">>
+  <<set _spell = _args[0]>>
+  <<set _caster = _args[1]>>
+  <<set _cl = _args[2]>>
+  <<if _spell.cost>>
+    <<for _c = 0; _c < _spell.cost.length; _c++>>
+      <<set _item = _spell.cost[_c]>>
+      <<if _item.scaling === "CastingLevel">>
+        <<set _caster[_item.res] -= _item.value * _cl>>
+      <<else>>
+        <<set _caster[_item.res] -= _item.value>>
+      <</if>>
+    <</for>>
+  <</if>>
+<</widget>>
+
+
+/*
+  selectTargets：根据 targeting 规格选出目标单位数组，放 _targets。
+  _args[0] = 施法者单位（用于判定敌我）
+  _args[1] = targeting，单个对象或对象数组。每组：
+    {
+      side: "enemy"|"ally"|"self"|"any"   相对施法者的阵营
+      count: 数量（"all"模式忽略）
+      mode: "all"|"random"|"chosen"|"lowestHP"|"highestHP"
+      repeatable: random模式下是否允许重复选中同一单位（缺省false）
+      status: 过滤状态，缺省"active"（复活类传"defeated"）
+    }
+  _args[2] = chosenIds，mode含chosen时由调用方提供的目标id数组（缺省[]）
+*/
+<<widget "selectTargets">>
+  <<set _caster = _args[0]>>
+  <<set _spec = _args[1]>>
+  <<set _chosenIds = _args[2] || []>>
+
+  /* 统一成数组 */
+  <<if Array.isArray(_spec)>>
+    <<set _groups = _spec>>
+  <<else>>
+    <<set _groups = [_spec]>>
+  <</if>>
+
+  <<set _targets = []>>
+
+  <<for _g = 0; _g < _groups.length; _g++>>
+    <<set _grp = _groups[_g]>>
+    <<set _wantStatus = _grp.status || "active">>
+
+    /* 构建候选池 */
+    <<set _pool = []>>
+    <<for _u = 0; _u < $Units.length; _u++>>
+      <<set _cand = $Units[_u]>>
+      <<if _cand.status === _wantStatus && (not _cand.isFormation or _grp.includeFormation)>>
+        <<set _sideOK = false>>
+        <<if _grp.side === "any">>
+          <<set _sideOK = true>>
+        <<elseif _grp.side === "self">>
+          <<set _sideOK = (_cand.id === _caster.id)>>
+        <<elseif _grp.side === "ally">>
+          <<set _sideOK = (_cand.side === _caster.side)>>
+        <<elseif _grp.side === "enemy">>
+          <<set _sideOK = (_cand.side !== _caster.side)>>
+        <</if>>
+        <<if _sideOK>>
+          <<run _pool.push(_cand)>>
+        <</if>>
+      <</if>>
+    <</for>>
+
+    /* 按 mode 选取 */
+    <<switch _grp.mode>>
+      <<case "all">>
+        <<for _p = 0; _p < _pool.length; _p++>>
+          <<run _targets.push(_pool[_p])>>
+        <</for>>
+
+      <<case "chosen">>
+        <<for _ci = 0; _ci < _chosenIds.length; _ci++>>
+          <<set _picked = _pool.find(function(u){ return u.id === _chosenIds[_ci]; })>>
+          <<if _picked>>
+            <<run _targets.push(_picked)>>
+          <</if>>
+        <</for>>
+
+      <<case "lowestHP">>
+        <<set _sorted = _pool.slice().sort(function(a,b){ return a.RemainHP - b.RemainHP; })>>
+        <<set _n = Math.min(_grp.count, _sorted.length)>>
+        <<for _p = 0; _p < _n; _p++>>
+          <<run _targets.push(_sorted[_p])>>
+        <</for>>
+
+      <<case "highestHP">>
+        <<set _sorted = _pool.slice().sort(function(a,b){ return b.RemainHP - a.RemainHP; })>>
+        <<set _n = Math.min(_grp.count, _sorted.length)>>
+        <<for _p = 0; _p < _n; _p++>>
+          <<run _targets.push(_sorted[_p])>>
+        <</for>>
+
+      <<case "random">>
+        <<if _grp.repeatable>>
+          /* 可重复：每次从全池随机抽 */
+          <<for _r = 0; _r < _grp.count; _r++>>
+            <<if _pool.length > 0>>
+              <<run _targets.push(_pool.random())>>
+            <</if>>
+          <</for>>
+        <<else>>
+          /* 不可重复：洗牌取前count个 */
+          <<set _shuf = _pool.slice().shuffle()>>
+          <<set _n = Math.min(_grp.count, _shuf.length)>>
+          <<for _p = 0; _p < _n; _p++>>
+            <<run _targets.push(_shuf[_p])>>
+          <</for>>
+        <</if>>
+
+      <<default>>
+        /* 未知mode：取池中前count个 */
+        <<set _n = Math.min(_grp.count || 1, _pool.length)>>
+        <<for _p = 0; _p < _n; _p++>>
+          <<run _targets.push(_pool[_p])>>
+        <</for>>
+    <</switch>>
+  <</for>>
+<</widget>>
+
+
+/*
+  runOnHit：对单个目标执行一组 onHit 效果（被 performAction 内部调用）。
+  _args[0]=目标 _args[1]=onHit数组 _args[2]=施法者 _args[3]=castingLevel
+  onHit 项 kind：
+    "damage": { kind, damageType, element, value(负数=伤害), scaling, tags, vsType, canKill }
+    "heal":   { kind, value(正数), scaling }           治疗，走applyDamage负amount
+    "buff":   { kind, buffId, duration, durationType, stackPerLevel, extraRemoveBy, shield }
+    "status": { kind, value }                          直接设status（复活="active"）
+*/
+<<widget "runOnHit">>
+  <<set _tgt = _args[0]>>
+  <<set _onHit = _args[1]>>
+  <<set _caster = _args[2]>>
+  <<set _cl = _args[3]>>
+  /* _args[4] = 本次行动的目标总数，用于均摊；缺省1 */
+  <<set _tgtCount = (_args[4] !== undefined && _args[4] > 0) ? _args[4] : 1>>
+
+  <<for _h = 0; _h < _onHit.length; _h++>>
+    <<set _e = _onHit[_h]>>
+
+    <<if _e.kind === "damage">>
+      <<set _v = _e.value>>
+      <<if _e.scaling === "CastingLevel">>
+        <<set _v = _e.value * _cl>>
+      <<elseif _e.scaling>>
+        <<set _v = _e.value * _caster[_e.scaling]>>
+      <</if>>
+      /* 均摊：总量平分到每个目标 */
+      <<if _e.split>>
+        <<set _v = _v / _tgtCount>>
+      <</if>>
+      <<applyDamage _tgt `{
+          amount: -_v,
+          damageType: _e.damageType || "magical",
+          element: _e.element || "none",
+          tags: _e.tags || [],
+          vsType: _e.vsType || null,
+          canKill: (_e.canKill !== undefined) ? _e.canKill : true
+      }` _caster>>
+
+
+    <<elseif _e.kind === "heal">>
+      <<set _v = _e.value>>
+      <<if _e.scaling === "CastingLevel">>
+        <<set _v = _e.value * _cl>>
+      <<elseif _e.scaling>>
+        <<set _v = _e.value * _caster[_e.scaling]>>
+      <</if>>
+      <<if _e.split>>
+        <<set _v = _v / _tgtCount>>
+      <</if>>
+      <<applyDamage _tgt `{ amount: -Math.abs(_v), damageType:"true", element:"none", tags:[] }`>>
+
+    <<elseif _e.kind === "buff">>
+      <<applyBuff _tgt `{
+          buffId: _e.buffId,
+          duration: _e.duration,
+          durationType: _e.durationType,
+          stackPerLevel: (_e.stackPerLevel !== undefined) ? _e.stackPerLevel : 1,
+          castingLevel: _cl,
+          extraRemoveBy: _e.extraRemoveBy || [],
+          source: _caster.id,
+          shield: _e.shield
+      }`>>
+
+    <<elseif _e.kind === "status">>
+      <<set _tgt.status = _e.value>>
+      <<if _e.value === "active" && _tgt.RemainHP <= 0>>
+        <<set _tgt.RemainHP = 1>>
+      <</if>>
+    <<elseif _e.kind === "obscure">>
+      /* 以目标所在格为中心，radius范围内格子设obscured */
+      <<if $Field.grid && _tgt.pos>>
+        <<set _obR = _e.radius !== undefined ? _e.radius : 1>>
+        <<for _obY = _tgt.pos.y - _obR; _obY <= _tgt.pos.y + _obR; _obY++>>
+          <<for _obX = _tgt.pos.x - _obR; _obX <= _tgt.pos.x + _obR; _obX++>>
+            <<cellAt _obX _obY>>
+            <<if _cell>><<set _cell.obscured = true>><</if>>
+          <</for>>
+        <</for>>
       <</if>>
     <</if>>
   <</for>>
 <</widget>>
+
+
+
+/*
+  performAction：执行一个完整行动（统一入口）。
+  _args[0] = action：
+    {
+      actionType: "spell"|"attack"|...   本阶段实现 spell、attack
+      sourceId,                          施法者id
+      ref,                               spell时指向$SpellLibrary的key
+      castingLevel,                      缺省1
+      targeting,                         缺省用法术的defaultTargeting
+      chosenIds                          mode含chosen时的目标id数组
+    }
+  执行：扣cost → 选目标 → 对每个目标runOnHit → 施法者tickBuffs。
+  行动后置位由ATB引擎负责，本widget不动gauge。
+*/
+<<widget "performAction">>
+  <<set _act = _args[0]>>
+  <<findUnit _act.sourceId>><<set _caster = _foundUnit>>
+
+  <<if not _caster or _caster.status !== "active">>
+    /* 施法者不可行动，直接返回 */
+  <<else>>
+    <<set _cl = (_act.castingLevel !== undefined) ? _act.castingLevel : 1>>
+
+    <<switch _act.actionType>>
+
+      <<case "spell">>
+        <<set _spell = $SpellLibrary[_act.ref]>>
+        <<canCast _spell _caster _cl>>
+        <<if _canCast>>
+          <<payCost _spell _caster _cl>>
+          /* 友方法术(heal/buff/revive)仍按defaultTargeting选单位；攻击性法术选格 */
+          <<if _spell.defaultTargeting && (_spell.defaultTargeting.side === "ally" || _spell.defaultTargeting.side === "self")>>
+            <<selectTargets _caster _spell.defaultTargeting _act.chosenIds>>
+            <<set _tc = _targets.length>>
+            <<for _ti = 0; _ti < _targets.length; _ti++>>
+              <<runOnHit _targets[_ti] _spell.onHit _caster _cl _tc>>
+            <</for>>
+            <<set $ActionLog = _caster.name + "对" + (_targets.length > 0 ? _targets[0].name : "?") + "施放了" + _spell.name + "。">>
+          <<else>>
+            /* 攻击性法术：选格 */
+            <<set _tcx = _act.targetCell.x>>
+            <<set _tcy = _act.targetCell.y>>
+            <<if _spell.aoe>>
+              /* 区域AOE */
+              <<aoeRadius _cl>><<set _spR = _aoeR>>
+              <<unitsInArea _tcx _tcy _spR "enemy" _caster>>
+              <<set _tc = _areaUnits.length>>
+              <<for _ti = 0; _ti < _areaUnits.length; _ti++>>
+                <<runOnHit _areaUnits[_ti] _spell.onHit _caster _cl _tc>>
+              <</for>>
+              <<set $ActionLog = _caster.name + "施放了" + _spell.name + "，波及" + _tc + "个目标。">>
+            <<else>>
+              /* 单体：打中该格单位 */
+              <<unitAtCell _tcx _tcy>>
+              <<if _cellUnit && _cellUnit.side !== _caster.side>>
+                <<runOnHit _cellUnit _spell.onHit _caster _cl 1>>
+                <<set $ActionLog = _caster.name + "对" + _cellUnit.name + "施放了" + _spell.name + "。">>
+              <<else>>
+                <<set $ActionLog = _caster.name + "的" + _spell.name + "落空了。">>
+              <</if>>
+            <</if>>
+          <</if>>
+        <</if>>
+
+      <<case "attack">>
+        <<set _w = _caster.weapon>>
+        <<if _w>>
+          <<set _tcx = _act.targetCell.x>>
+          <<set _tcy = _act.targetCell.y>>
+          <<set _wRange = _w.range !== undefined ? _w.range : 1>>
+          <<set _wMin = _w.minRange || 0>>
+          <<set _heavyLv = _act.heavyLevel || 0>>
+          <<inWeaponRange _caster _tcx _tcy _wRange _wMin>>
+          <<if _inRange>>
+            <<unitAtCell _tcx _tcy>>
+            <<if _cellUnit && _cellUnit.side !== _caster.side>>
+              <<set _baseVal = _w.baseValue>>
+              <<if _w.scaling>><<set _baseVal += _caster[_w.scaling]>><</if>>
+              /* 重击倍率：第N级 ×(1+N) */
+              <<set _atkMult = 1 + _heavyLv>>
+              <<set _baseVal = Math.round(_baseVal * _atkMult * _rangeFactor)>>
+              <<set _atkTags = [(_w.damageType || "physical")]>>
+              <<if _w.element && _w.element !== "none">><<run _atkTags.push(_w.element)>><</if>>
+              <<set _atkOnHit = [{ kind:"damage", value:-_baseVal, damageType:_w.damageType||"physical", element:_w.element||"none", scaling:null, tags:_atkTags }]>>
+              <<if _w.enchant>>
+                <<for _en = 0; _en < _w.enchant.length; _en++>>
+                  <<run _atkOnHit.push({ kind:"damage", value:-Math.round(_w.enchant[_en].value*_atkMult*_rangeFactor), damageType:"magical", element:_w.enchant[_en].element, scaling:null, tags:[_w.enchant[_en].element] })>>
+                <</for>>
+              <</if>>
+              <<runOnHit _cellUnit _atkOnHit _caster _cl 1>>
+              /* 消耗：基础speedCost + 重击附加(10×(级+1)) */
+              <<set _atkCost = _w.speedCost !== undefined ? _w.speedCost : 10>>
+              <<if _heavyLv > 0>>
+                <<set _atkCost += 10 * (_heavyLv + 1)>>
+              <</if>>
+              <<extraCost _caster "actCostAdd">>
+              <<set _atkCost += _extraCost>>
+              <<set _caster.RemainSpeedLevel -= _atkCost>>
+              <<set $ActionLog = _caster.name + (_heavyLv > 0 ? "重击" : "攻击") + "了" + _cellUnit.name + (_rangeFactor < 1 ? "（近距，威力减弱）" : "") + "。">>
+            <<else>>
+              <<set $ActionLog = _caster.name + "的攻击落空了。">>
+            <</if>>
+          <<else>>
+            <<set $ActionLog = _caster.name + "的目标超出射程。">>
+          <</if>>
+        <</if>>
+
+
+      <<case "formation">>
+        <<castFormation _caster _act.ref _act.castingLevel _act.targetCell>>
+
+      <<case "item">>
+        <<useItem _caster _act.ref _act.targetCell>>
+
+      <<case "move">>
+        <<moveUnit _caster _act.targetCell.x _act.targetCell.y>>
+
+      <<case "physical">>
+        <<doSkill _caster _act.ref _act>>
+
+      <<default>>
+        /* physical / array / item 留待后续阶段 */
+
+    <</switch>>
+
+    /* 仅非玩家可控单位在行动后立即tick；玩家由结束回合统一tick */
+    <<canControl _caster>>
+
+  <</if>>
+<</widget>>
+
+/*
+  finalInitiative：取单位的最终先攻速度（基础+buff），结果放 _fi。
+*/
+<<widget "finalInitiative">>
+  <<stat _args[0] "initiative">>
+  <<set _fi = _stat>>
+  <<if typeof _fi !== "number" || isNaN(_fi) || _fi < 1>><<set _fi = 1>><</if>>
+<</widget>>
+
+
+
+/*
+  hasFlag：判断单位是否被某个buff flag影响（如cannotAct），结果放 _hasFlag。
+  _args[0]=单位 _args[1]=flag字符串
+*/
+<<widget "hasFlag">>
+  <<set _u = _args[0]>>
+  <<set _flag = _args[1]>>
+  <<set _hasFlag = false>>
+  <<for _b = 0; _b < _u.buff.length; _b++>>
+    <<set _def = $BuffLibrary[_u.buff[_b].id]>>
+    <<if _def && _def.flags && _def.flags.indexOf(_flag) !== -1>>
+      <<set _hasFlag = true>>
+      <<break>>
+    <</if>>
+  <</for>>
+<</widget>>
+
+
+/*
+  tickField：推进全局时间一格。
+  - $Field.tick += 1
+  - 递减并触发 globalTicks 类buff（对所有单位）
+  - 递减并触发 $Field.triggers（增援/法阵等）
+  注意：这里只推进"全局时间相关"的东西；单位的selfTurns buff由tickBuffs在行动后处理。
+*/
+<<widget "tickField">>
+  <<set $Field.tick += 1>>
+
+  /* 递减所有单位的 globalTicks buff，结算其perRound，移除到期 */
+  <<for _u = 0; _u < $Units.length; _u++>>
+    <<set _unit = $Units[_u]>>
+    <<if _unit.status === "active">>
+      <<set _kept = []>>
+      <<for _b = 0; _b < _unit.buff.length; _b++>>
+        <<set _inst = _unit.buff[_b]>>
+        <<if _inst.durationType === "globalTicks">>
+          <<set _def = $BuffLibrary[_inst.id]>>
+          /* 结算 globalTicks buff 的 perRound（如全局DOT） */
+          <<if _def && _def.perRound && _def.perRound.length > 0>>
+            <<for _e = 0; _e < _def.perRound.length; _e++>>
+              <<set _pr = _def.perRound[_e]>>
+              <<set _amt = _pr.value>>
+              <<if _pr.scaling === "stack">>
+                <<set _amt = _pr.value * _inst.stack>>
+              <</if>>
+              <<applyDamage _unit `{ amount:-_amt, damageType:_pr.damageType||"true", element:_pr.element||"none", tags:_pr.tags||[], canKill:(_pr.canKill!==undefined)?_pr.canKill:true }`>>
+            <</for>>
+          <</if>>
+          <<set _inst.duration -= 1>>
+          <<if _inst.duration > 0>>
+            <<run _kept.push(_inst)>>
+          <</if>>
+        <<else>>
+          <<run _kept.push(_inst)>>
+        <</if>>
+      <</for>>
+      <<set _unit.buff = _kept>>
+    <</if>>
+  <</for>>
+
+    /* 法阵预付池消耗 */
+  <<set _tfFormDispel = []>>
+  <<for _tfF = 0; _tfF < $Units.length; _tfF++>>
+    <<if $Units[_tfF].isFormation && $Units[_tfF].status === "active">>
+      <<set _tfFD = $FormationLibrary[$Units[_tfF].formationData.formationId]>>
+      <<set $Units[_tfF].formationData.upkeepPool -= _tfFD.upkeepDrainPerTick>>
+      <<if $Units[_tfF].formationData.upkeepPool <= 0>>
+        <<run _tfFormDispel.push($Units[_tfF])>>
+      <</if>>
+    <</if>>
+  <</for>>
+  <<for _tfF = 0; _tfF < _tfFormDispel.length; _tfF++>>
+    <<dispelFormation _tfFormDispel[_tfF]>>
+  <</for>>
+
+
+  /* 递减触发器，到期则执行 */
+  <<set _keptTrig = []>>
+  <<for _g = 0; _g < $Field.triggers.length; _g++>>
+    <<set _trig = $Field.triggers[_g]>>
+    <<set _trig.remaining -= 1>>
+    <<if _trig.remaining <= 0>>
+      <<fireTrigger _trig>>
+    <<else>>
+      <<run _keptTrig.push(_trig)>>
+    <</if>>
+  <</for>>
+  <<set $Field.triggers = _keptTrig>>
+<</widget>>
+
+
+/*
+  fireTrigger：执行一个到期的触发器（增援/法阵召唤等）。
+  trigger.action 决定行为，本阶段实现 "spawn"（召唤单位）。
+  _args[0] = trigger，例：
+    { id:"reinforce", remaining:0, action:"spawn", payload:{ ...spawnUnit参数... } }
+*/
+<<widget "fireTrigger">>
+  <<set _trig = _args[0]>>
+  <<switch _trig.action>>
+    <<case "spawn">>
+      <<spawnUnit _trig.payload>>
+      <<set _ftNew = $Units[$Units.length - 1]>>
+      <<if $Field.grid>>
+        <<if _ftNew.side === "enemy">>
+          <<set _ftX = $Field.grid.width - 1>>
+          <<placeNearCell _ftNew _ftX 0>>
+        <<else>>
+          <<placeNearCell _ftNew 0 0>>
+        <</if>>
+      <</if>>
+      <<set $ActionLog = _ftNew.name + "加入了战斗！">>
+    <<default>>
+      /* 其他action类型留待后续（法阵效果等） */
+  <</switch>>
+<</widget>>
+
+
+/*
+  advanceATB：把ATB推进到"下一个单位达到行动阈值"，返回该单位id放 _readyUnitId。
+  - 反复 tick：所有active单位 gauge+=finalInitiative，同时 tickField
+  - 一旦有单位 gauge>=100，挑选优先级最高者，返回其id（不在此扣gauge、不行动）
+  - 若场上无任何active单位，返回 null
+  - 安全上限防死循环
+*/
+<<widget "advanceATB">>
+  <<set _readyUnitId = null>>
+
+  <<for _atbS = 0; _atbS < 100000; _atbS++>>
+
+    <<set _anyActive = false>>
+    <<for _atbA = 0; _atbA < $Units.length; _atbA++>>
+      <<if $Units[_atbA].status === "active">>
+        <<set _anyActive = true>>
+        <<break>>
+      <</if>>
+    <</for>>
+    <<if not _anyActive>>
+      <<set _readyUnitId = null>>
+      <<break>>
+    <</if>>
+
+    /* 看当前有没有已越线(gauge>=100)的单位，有则返回gauge最高者 */
+    <<set _best = null>>
+    <<set _bestInit = 0>>
+    <<for _atbB = 0; _atbB < $Units.length; _atbB++>>
+      <<set _cand = $Units[_atbB]>>
+      <<if _cand.status === "active" && _cand.gauge >= 100>>
+        <<finalInitiative _cand>>
+        <<set _candInit = _fi>>
+        <<if _best === null>>
+          <<set _best = _cand>><<set _bestInit = _candInit>>
+        <<elseif _cand.gauge > _best.gauge>>
+          <<set _best = _cand>><<set _bestInit = _candInit>>
+        <<elseif _cand.gauge === _best.gauge and _candInit > _bestInit>>
+          <<set _best = _cand>><<set _bestInit = _candInit>>
+        <</if>>
+      <</if>>
+    <</for>>
+
+    <<if _best !== null>>
+      <<set _readyUnitId = _best.id>>
+      <<break>>
+    <</if>>
+
+    /* 没人越线 → 推进一个tick */
+    <<for _atbC = 0; _atbC < $Units.length; _atbC++>>
+      <<if $Units[_atbC].status === "active">>
+        <<finalInitiative $Units[_atbC]>>
+        <<set $Units[_atbC].gauge += _fi>>
+      <</if>>
+    <</for>>
+    <<tickField>>
+
+  <</for>>
+<</widget>>
+
+
+
+
+
+/*
+  consumeTurn：单位行动完毕后调用，扣除其行动条。
+  _args[0]=单位
+*/
+<<widget "consumeTurn">>
+  <<set _u = _args[0]>>
+  <<set _u.gauge -= 100>>
+  <<if _u.gauge < 0>><<set _u.gauge = 0>><</if>>
+<</widget>>
+
+
+/*
+  takeTurn：推进ATB并让下一个就绪单位行动。
+  - 找到就绪单位
+  - 若被cannotAct（如冻结）：跳过行动，但仍tickBuffs+consumeTurn
+  - 否则：玩家/可控单位 → 设置 _needPlayerInput=true 并返回（交给UI），不自动行动
+            AI单位 → 调用AI决策（阶段5的decideAction）执行
+  结果：
+    _turnUnitId   本次轮到的单位id（null表示无人可行动）
+    _needPlayerInput  是否需要等待玩家输入
+*/
+<<widget "takeTurn">>
+  <<set _needPlayerInput = false>>
+  <<set $ActionLog = "">>
+  <<advanceATB>>
+  <<set _turnUnitId = _readyUnitId>>
+
+  <<if _turnUnitId === null>>
+    /* 无人可行动 */
+    <<else>>
+    <<findUnit _turnUnitId>><<set _actor = _foundUnit>>
+
+    <<if _actor.isFormation>>
+      <<formationTurn _actor>>
+      <<findUnit _turnUnitId>>
+      <<if _foundUnit>><<consumeTurn _foundUnit>><</if>>
+    <<else>>
+      <<hasFlag _actor "cannotAct">>
+      <<if _hasFlag>>
+        <<set $ActionLog = _actor.name + "被定身了，无法行动。">>
+        <<tickBuffs _actor>>
+        <<consumeTurn _actor>>
+      <<else>>
+        <<canControl _actor>>
+        <<if _canControl>>
+          <<set _needPlayerInput = true>>
+        <<else>>
+          <<if Macro.has("aiAct")>>
+            <<aiAct _actor>>
+          <<else>>
+            <<set $ActionLog = _actor.name + "踌躇不前。">>
+          <</if>>
+          <<consumeTurn _actor>>
+        <</if>>
+      <</if>>
+    <</if>>
+  <</if>>
+<</widget>>
+
+
+/*
+  checkBattleEnd：检查战斗是否结束并跳转。结果放 _battleOver（布尔）。
+  - 玩家本体(isPlayer)状态为dead → 游戏结束/失败
+  - 敌方全部非active → 胜利
+  - 我方(ally)全部非active → 失败
+*/
+<<widget "checkBattleEnd">>
+  <<set _battleOver = false>>
+
+  /* 玩家本体死亡判定（dead才算游戏结束级别失败） */
+  <<set _playerDead = false>>
+  <<for _u = 0; _u < $Units.length; _u++>>
+    <<if $Units[_u].isPlayer && $Units[_u].status === "dead">>
+      <<set _playerDead = true>>
+    <</if>>
+  <</for>>
+
+  <<set _enemyAlive = false>>
+  <<set _allyAlive = false>>
+  <<for _u = 0; _u < $Units.length; _u++>>
+    <<if $Units[_u].status === "active" && not $Units[_u].isFormation>>
+      <<if $Units[_u].side === "enemy">>
+        <<set _enemyAlive = true>>
+      <<elseif $Units[_u].side === "ally">>
+        <<set _allyAlive = true>>
+      <</if>>
+    <</if>>
+  <</for>>
+
+
+    <<if _playerDead or not _allyAlive>>
+    <<set _battleOver = true>>
+    <<set $BattleExitReason = "lose">>
+    <<set $Field = { buff:[], triggers:[], tick:0, round:1, grid:null }>>
+    <<goto $BattleLose>>
+  <<elseif not _enemyAlive>>
+    <<set _battleOver = true>>
+    <<set $Field = { buff:[], triggers:[], tick:0, round:1, grid:null }>>
+    <<settleBattle>>
+    <<set $BattleExitReason = "win">>
+    <<goto $BattleWin>>
+  <</if>>
+<</widget>>
+
+/*
+  refreshActionPoints：单位行动轮次开始时刷新动作点。
+  RemainSpeedLevel ← 最终SpeedLevel；RemainMagicLevel ← 最终MagicLevel。
+  并 turnCount += 1。
+  _args[0]=单位
+*/
+<<widget "refreshActionPoints">>
+  <<set _apU = _args[0]>>
+  <<stat _apU "SpeedLevel">>
+  <<set _apU.RemainSpeedLevel = _stat>>
+  <<stat _apU "MagicLevel">>
+  <<set _apU.RemainMagicLevel = _stat>>
+  <<set _apU.turnCount += 1>>
+  <<refreshStandBuff _apU>>
+<</widget>>
+
+
+/*
+  spellDamagePerLevel：从法术onHit提取"对chosen的单段伤害每级值"(绝对值，正数)，放 _dpl。
+  找第一个 kind:"damage" 且 value<0 的项；scaling为CastingLevel则每级=|value|，否则=|value|(不随级)。
+  无伤害项则 _dpl=0。_args[0]=法术数据
+*/
+<<widget "spellDamagePerLevel">>
+  <<set _sdSpell = _args[0]>>
+  <<set _dpl = 0>>
+  <<for _sd = 0; _sd < _sdSpell.onHit.length; _sd++>>
+    <<set _eff = _sdSpell.onHit[_sd]>>
+    <<if _eff.kind === "damage" && _eff.value < 0>>
+      <<set _dpl = Math.abs(_eff.value)>>
+      <<break>>
+    <</if>>
+  <</for>>
+<</widget>>
+
+
+
+/*
+  spellHealPerLevel：提取治疗每级值(正数)，放 _hpl。找第一个 kind:"heal" 项。
+  _args[0]=法术数据
+*/
+<<widget "spellHealPerLevel">>
+  <<set _shSpell = _args[0]>>
+  <<set _hpl = 0>>
+  <<for _sh = 0; _sh < _shSpell.onHit.length; _sh++>>
+    <<set _eff = _shSpell.onHit[_sh]>>
+    <<if _eff.kind === "heal">>
+      <<set _hpl = Math.abs(_eff.value)>>
+      <<break>>
+    <</if>>
+  <</for>>
+<</widget>>
+
+
+
+/*
+  spellHasKind：法术onHit是否含某kind，放 _hasKind。_args[0]=法术 _args[1]=kind字符串
+*/
+<<widget "spellHasKind">>
+  <<set _hkSpell = _args[0]>>
+  <<set _hasKind = false>>
+  <<for _hk = 0; _hk < _hkSpell.onHit.length; _hk++>>
+    <<if _hkSpell.onHit[_hk].kind === _args[1]>>
+      <<set _hasKind = true>>
+      <<break>>
+    <</if>>
+  <</for>>
+<</widget>>
+
+
+
+/*
+  spellBuffIds：取法术onHit里所有 kind:"buff" 的 buffId 数组，放 _buffIds。_args[0]=法术
+*/
+<<widget "spellBuffIds">>
+  <<set _bSpell = _args[0]>>
+  <<set _buffIds = []>>
+  <<for _sb = 0; _sb < _bSpell.onHit.length; _sb++>>
+    <<if _bSpell.onHit[_sb].kind === "buff">>
+      <<run _buffIds.push(_bSpell.onHit[_sb].buffId)>>
+    <</if>>
+  <</for>>
+<</widget>>
+
+
+
+/*
+  unitHasBuff：单位是否已有某id的buff，放 _unitHasBuff。_args[0]=单位 _args[1]=buffId
+*/
+<<widget "unitHasBuff">>
+  <<set _uhU = _args[0]>>
+  <<set _unitHasBuff = false>>
+  <<for _uh = 0; _uh < _uhU.buff.length; _uh++>>
+    <<if _uhU.buff[_uh].id === _args[1]>>
+      <<set _unitHasBuff = true>>
+      <<break>>
+    <</if>>
+  <</for>>
+<</widget>>
+
+
+
+<<widget "buffCategory">>
+  <<set _bcDef = $BuffLibrary[_args[0]]>>
+  <<set _buffCat = (_bcDef && _bcDef.category) ? _bcDef.category : "other">>
+<</widget>>
+
+/*
+  canAfford：判断某法术在某等级下，付得起MagicLevel+MP（用canCast）。已存在canCast，封装语义。
+  此处直接用canCast即可，不另写。
+*/
+
+/*
+  reserveMP：计算该单位当前应保留的MP下限，放 _reserveMP。
+  前3次行动(turnCount<=3)保留50%上限；之后每多一次行动递减15%，最低0。
+  _args[0]=单位
+*/
+<<widget "reserveMP">>
+  <<set _rmU = _args[0]>>
+  <<stat _rmU "maxMP">>
+  <<set _rmMax = _stat>>
+  <<if _rmU.turnCount <= 3>>
+    <<set _ratio = 0.5>>
+  <<else>>
+    <<set _ratio = 0.5 - (_rmU.turnCount - 3) * 0.15>>
+    <<if _ratio < 0>><<set _ratio = 0>><</if>>
+  <</if>>
+  <<set _reserveMP = _rmMax * _ratio>>
+<</widget>>
+
+
+/*
+  spellMPCost：法术在指定等级的MP消耗总额，放 _mpCost。_args[0]=法术 _args[1]=castingLevel
+*/
+<<widget "spellMPCost">>
+  <<set _mcSpell = _args[0]>>
+  <<set _mcLv = _args[1]>>
+  <<set _mpCost = 0>>
+  <<if _mcSpell.cost>>
+    <<for _mc = 0; _mc < _mcSpell.cost.length; _mc++>>
+      <<set _ci = _mcSpell.cost[_mc]>>
+      <<if _ci.res === "RemainMP">>
+        <<if _ci.scaling === "CastingLevel">>
+          <<set _mpCost += _ci.value * _mcLv>>
+        <<else>>
+          <<set _mpCost += _ci.value>>
+        <</if>>
+      <</if>>
+    <</for>>
+  <</if>>
+<</widget>>
+
+
+
+/*
+  decideAction：为单位决策出"一个"行动，结果放 _decided（action对象）或 null。
+  按优先级：
+    0. AOE能清掉全部剩余敌人 → 最高
+    1. 复活倒下队友
+    2. 紧急治疗(队友<30%)
+    （以下需满足保留MP，除非该次能秒杀单个目标）
+    3. 增益(survival>resource>damage)
+    4. 移动(阶段8占位，跳过)
+    5. 减益(目标无此buff时)
+    6. 敌多时AOE/均摊
+    7. 其他伤害
+    8. 普攻
+  _args[0]=施法者单位
+*/
+<<widget "decideAction">>
+  <<set _me = _args[0]>>
+  <<set _decided = null>>
+
+  <<set _enemies = $Units.filter(function(u){ return u.side !== _me.side && u.status === "active" && !u.isFormation; })>>
+  <<set _allies  = $Units.filter(function(u){ return u.side === _me.side && u.status === "active" && !u.isFormation; })>>
+  <<set _enemyCount = _enemies.length>>
+
+  <<reserveMP _me>>
+  <<set _reserve = _reserveMP>>
+
+  /* ===== 走位优先级A：残血(<30%)逃进烟雾 ===== */
+  <<if $Field.grid && _me.pos && _me.RemainSpeedLevel >= 10>>
+    <<stat _me "maxHP">><<set _meMax = _stat>>
+    <<if _me.RemainHP < _meMax * 0.3>>
+      /* 当前是否已在烟雾 */
+      <<cellAt _me.pos.x _me.pos.y>><<set _meInSmoke = (_cell && _cell.obscured)>>
+      <<if not _meInSmoke>>
+        <<findNearestSmokeCell _me>>
+        <<if _hasSmoke>>
+          <<stepToward _me _smokeX _smokeY>>
+          <<if _canStep>>
+            <<set _decided = { actionType:"move", sourceId:_me.id, targetCell:{ x:_stX, y:_stY } }>>
+          <</if>>
+        <</if>>
+      <<else>>
+        /* 已在烟雾：50%换到另一烟雾格 */
+        <<if Math.random() < 0.5>>
+          <<findNearestSmokeCell _me>>
+          <<if _hasSmoke && not (_smokeX === _me.pos.x && _smokeY === _me.pos.y)>>
+            <<stepToward _me _smokeX _smokeY>>
+            <<if _canStep>>
+              <<set _decided = { actionType:"move", sourceId:_me.id, targetCell:{ x:_stX, y:_stY } }>>
+            <</if>>
+          <</if>>
+        <</if>>
+      <</if>>
+    <</if>>
+  <</if>>
+
+  /* ===== 优先级1：复活 ===== */
+  <<if _decided === null>>
+    <<set _defeatedAlly = $Units.find(function(u){ return u.side === _me.side && u.status === "defeated" && !u.isFormation; })>>
+    <<if _defeatedAlly>>
+      <<for _ai = 0; _ai < _me.spell.length && _decided === null; _ai++>>
+        <<set _sp = $SpellLibrary[_me.spell[_ai]]>>
+        <<if _sp && _sp.aiRole === "revive">>
+          <<canCast _sp _me 1>>
+          <<if _canCast>>
+            <<set _decided = { actionType:"spell", sourceId:_me.id, ref:_me.spell[_ai], castingLevel:1, chosenIds:[_defeatedAlly.id] }>>
+          <</if>>
+        <</if>>
+      <</for>>
+    <</if>>
+  <</if>>
+
+  /* ===== 优先级2：紧急治疗 ===== */
+  <<if _decided === null>>
+    <<set _hurt = null>>
+    <<for _ai = 0; _ai < _allies.length; _ai++>>
+      <<stat _allies[_ai] "maxHP">>
+      <<if _allies[_ai].RemainHP < _stat * 0.3>>
+        <<if _hurt === null || _allies[_ai].RemainHP < _hurt.RemainHP>>
+          <<set _hurt = _allies[_ai]>>
+        <</if>>
+      <</if>>
+    <</for>>
+    <<if _hurt !== null>>
+      <<for _ai = 0; _ai < _me.spell.length && _decided === null; _ai++>>
+        <<set _sp = $SpellLibrary[_me.spell[_ai]]>>
+        <<if _sp && _sp.aiRole === "heal">>
+          <<spellHealPerLevel _sp>><<set _per = _hpl>>
+          <<if _per > 0>>
+            <<stat _hurt "maxHP">><<set _hMax = _stat>>
+            <<set _need = _hMax * 0.8 - _hurt.RemainHP>>
+            <<if _need <= 0>><<set _need = _per>><</if>>
+            <<set _lv = Math.ceil(_need / _per)>>
+            <<if _lv > _me.RemainMagicLevel>><<set _lv = _me.RemainMagicLevel>><</if>>
+            <<if _lv < 1>><<set _lv = 1>><</if>>
+            <<canCast _sp _me _lv>>
+            <<if _canCast>>
+              <<set _decided = { actionType:"spell", sourceId:_me.id, ref:_me.spell[_ai], castingLevel:_lv, chosenIds:[_hurt.id] }>>
+            <</if>>
+          <</if>>
+        <</if>>
+      <</for>>
+    <</if>>
+  <</if>>
+
+  /* ===== 优先级2.5：喝治疗药(自己残血<30%) ===== */
+  <<if _decided === null>>
+    <<stat _me "maxHP">><<set _meMaxH = _stat>>
+    <<if _me.RemainHP < _meMaxH * 0.3 && _me.items && _me.items.length > 0>>
+      <<for _ai = 0; _ai < _me.items.length && _decided === null; _ai++>>
+        <<set _itD = $ArtificeLibrary[_me.items[_ai].id]>>
+        <<itemRole _itD>>
+        <<if _itemRole === "heal">>
+          <<canUseItem _itD _me>>
+          <<if _canUse>>
+            <<set _decided = { actionType:"item", sourceId:_me.id, ref:_me.items[_ai].id }>>
+          <</if>>
+        <</if>>
+      <</for>>
+    <</if>>
+  <</if>>
+
+  /* ===== 优先级3：增益(survival>resource>damage) ===== */
+  <<if _decided === null>>
+    <<set _tierOrder = ["survival","resource","damage"]>>
+    <<for _to = 0; _to < _tierOrder.length && _decided === null; _to++>>
+      <<for _ai = 0; _ai < _me.spell.length && _decided === null; _ai++>>
+        <<set _sp = $SpellLibrary[_me.spell[_ai]]>>
+        <<if _sp && _sp.aiRole === "buff" && _sp.buffTier === _tierOrder[_to]>>
+          <<spellBuffIds _sp>><<set _bids = _buffIds>>
+          <<set _btgt = null>>
+          <<unitHasBuff _me (_bids.length > 0 ? _bids[0] : "")>>
+          <<if _bids.length > 0 && not _unitHasBuff>>
+            <<set _btgt = _me>>
+          <</if>>
+          <<if _btgt !== null>>
+            <<spellMPCost _sp 1>><<set _cost = _mpCost>>
+            <<if _me.RemainMP - _cost >= _reserve>>
+              <<canCast _sp _me 1>>
+              <<if _canCast>>
+                <<set _decided = { actionType:"spell", sourceId:_me.id, ref:_me.spell[_ai], castingLevel:1, chosenIds:[_btgt.id] }>>
+              <</if>>
+            <</if>>
+          <</if>>
+        <</if>>
+      <</for>>
+    <</for>>
+  <</if>>
+
+  /* ===== 优先级3.5：法阵(场上无同名法阵时布阵) ===== */
+  <<if _decided === null && _me.formation && _me.formation.length > 0>>
+    <<for _ai = 0; _ai < _me.formation.length && _decided === null; _ai++>>
+      <<set _fm = $FormationLibrary[_me.formation[_ai]]>>
+      <<if _fm>>
+        /* 场上有没有同名法阵 */
+        <<set _fmExists = false>>
+        <<for _aj = 0; _aj < $Units.length; _aj++>>
+          <<if $Units[_aj].isFormation && $Units[_aj].formationData && $Units[_aj].formationData.formationId === _me.formation[_ai]>>
+            <<set _fmExists = true>><<break>>
+          <</if>>
+        <</for>>
+        <<if not _fmExists>>
+          /* 检查付得起(CastingLevel 1) */
+          <<set _fmCanPay = true>>
+          <<for _aj = 0; _aj < _fm.cost.length; _aj++>>
+            <<set _fmC = _fm.cost[_aj]>>
+            <<set _fmNeed = _fmC.scaling === "CastingLevel" ? _fmC.value : _fmC.value>>
+            <<if _me[_fmC.res] < _fmNeed>><<set _fmCanPay = false>><</if>>
+          <</for>>
+          <<if _fmCanPay>>
+            /* 选格法阵(area/point)：以最近敌人或自身为中心 */
+            <<if _fm.targetMode === "area" || _fm.targetMode === "point">>
+              <<aiPickTarget _me>>
+              <<if _aiTgt && _aiTgt.pos>>
+                <<set _decided = { actionType:"formation", sourceId:_me.id, ref:_me.formation[_ai], castingLevel:1, targetCell:{ x:_aiTgt.pos.x, y:_aiTgt.pos.y } }>>
+              <<else>>
+                <<set _decided = { actionType:"formation", sourceId:_me.id, ref:_me.formation[_ai], castingLevel:1 }>>
+              <</if>>
+            <<else>>
+              /* 非选格法阵直接布 */
+              <<set _decided = { actionType:"formation", sourceId:_me.id, ref:_me.formation[_ai], castingLevel:1 }>>
+            <</if>>
+          <</if>>
+        <</if>>
+      <</if>>
+    <</for>>
+  <</if>>
+
+
+  /* ===== 优先级5：减益(目标无此buff) ===== */
+  <<if _decided === null && _enemyCount > 0>>
+    <<aiPickTarget _me>>
+    <<if _aiTgt !== null>>
+      <<for _ai = 0; _ai < _me.spell.length && _decided === null; _ai++>>
+        <<set _sp = $SpellLibrary[_me.spell[_ai]]>>
+        <<if _sp && _sp.aiRole === "debuff">>
+          <<spellBuffIds _sp>><<set _bids = _buffIds>>
+          <<set _dtgt = null>>
+          <<for _aj = 0; _aj < _enemies.length && _dtgt === null; _aj++>>
+            <<if _bids.length > 0>>
+              <<unitHasBuff _enemies[_aj] _bids[0]>>
+              <<if not _unitHasBuff>><<set _dtgt = _enemies[_aj]>><</if>>
+            <</if>>
+          <</for>>
+          <<if _dtgt !== null>>
+            <<set _spRange = _sp.range !== undefined ? _sp.range : 999>>
+            <<inWeaponRange _me _dtgt.pos.x _dtgt.pos.y _spRange 0>>
+            <<spellMPCost _sp 1>><<set _cost = _mpCost>>
+            <<if _me.RemainMP - _cost >= _reserve>>
+              <<if _inRange>>
+                <<canCast _sp _me 1>>
+                <<if _canCast>>
+                  <<set _decided = { actionType:"spell", sourceId:_me.id, ref:_me.spell[_ai], castingLevel:1, targetCell:{ x:_dtgt.pos.x, y:_dtgt.pos.y } }>>
+                <</if>>
+              <<else>>
+                /* 超距：走近 */
+                <<stepToward _me _dtgt.pos.x _dtgt.pos.y>>
+                <<if _canStep>>
+                  <<set _decided = { actionType:"move", sourceId:_me.id, targetCell:{ x:_stX, y:_stY } }>>
+                <</if>>
+              <</if>>
+            <</if>>
+          <</if>>
+        <</if>>
+      <</for>>
+    <</if>>
+  <</if>>
+
+  /* ===== 优先级6&7&8：伤害(AOE→单体法术→普攻)，含走近 ===== */
+  <<if _decided === null && _enemyCount > 0>>
+    <<aiPickTarget _me>>
+    <<set _wtgt = _aiTgt>>
+    <<if _wtgt !== null>>
+
+      /* 6: AOE (敌>=2) */
+      <<if _enemyCount >= 2>>
+        <<for _ai = 0; _ai < _me.spell.length && _decided === null; _ai++>>
+          <<set _sp = $SpellLibrary[_me.spell[_ai]]>>
+          <<if _sp && _sp.aiRole === "aoe">>
+            <<set _spRange = _sp.range !== undefined ? _sp.range : 999>>
+            <<inWeaponRange _me _wtgt.pos.x _wtgt.pos.y _spRange 0>>
+            <<spellMPCost _sp 1>><<set _cost = _mpCost>>
+            <<if _me.RemainMP - _cost >= _reserve>>
+              <<if _inRange>>
+                <<canCast _sp _me 1>>
+                <<if _canCast>>
+                  <<set _decided = { actionType:"spell", sourceId:_me.id, ref:_me.spell[_ai], castingLevel:1, targetCell:{ x:_wtgt.pos.x, y:_wtgt.pos.y } }>>
+                <</if>>
+              <</if>>
+            <</if>>
+          <</if>>
+        <</for>>
+      <</if>>
+
+      /* 7: 单体伤害法术(秒杀无视保留MP) */
+      <<for _ai = 0; _ai < _me.spell.length && _decided === null; _ai++>>
+        <<set _sp = $SpellLibrary[_me.spell[_ai]]>>
+        <<if _sp && _sp.aiRole === "damage">>
+          <<spellDamagePerLevel _sp>><<set _per = _dpl>>
+          <<if _per > 0>>
+            <<set _spRange = _sp.range !== undefined ? _sp.range : 999>>
+            <<inWeaponRange _me _wtgt.pos.x _wtgt.pos.y _spRange 0>>
+            <<if _inRange>>
+              <<set _killLv = Math.ceil(_wtgt.RemainHP / _per)>>
+              <<if _killLv > _me.RemainMagicLevel>><<set _killLv = _me.RemainMagicLevel>><</if>>
+              <<canCast _sp _me _killLv>>
+              <<if _canCast && _per * _killLv >= _wtgt.RemainHP>>
+                <<set _decided = { actionType:"spell", sourceId:_me.id, ref:_me.spell[_ai], castingLevel:_killLv, targetCell:{ x:_wtgt.pos.x, y:_wtgt.pos.y } }>>
+              <<else>>
+                <<spellMPCost _sp 1>><<set _per1 = _mpCost>>
+                <<set _budget = _me.RemainMP - _reserve>>
+                <<if _budget > 0 && _per1 > 0>>
+                  <<set _maxByMP = Math.floor(_budget / _per1)>>
+                <<elseif _per1 === 0>>
+                  <<set _maxByMP = _me.RemainMagicLevel>>
+                <<else>>
+                  <<set _maxByMP = 0>>
+                <</if>>
+                <<set _lv = Math.min(_maxByMP, _me.RemainMagicLevel, _killLv)>>
+                <<if _lv >= 1>>
+                  <<canCast _sp _me _lv>>
+                  <<if _canCast>>
+                    <<set _decided = { actionType:"spell", sourceId:_me.id, ref:_me.spell[_ai], castingLevel:_lv, targetCell:{ x:_wtgt.pos.x, y:_wtgt.pos.y } }>>
+                  <</if>>
+                <</if>>
+              <</if>>
+            <</if>>
+          <</if>>
+        <</if>>
+      <</for>>
+
+      /* 7.3: 剑技(需武器，有合适剑技且射程够) */
+      <<if _decided === null && _me.skill && _me.skill.length > 0 && _me.weapon>>
+        <<for _ai = 0; _ai < _me.skill.length && _decided === null; _ai++>>
+          <<set _sk = $SkillLibrary[_me.skill[_ai]]>>
+          <<if _sk>>
+            <<set _skCost = _sk.cost[0].value>>
+            <<if _me.RemainSpeedLevel >= _skCost>>
+              <<if _sk.targetMode === "cell">>
+                /* 单体/区域剑技：检查射程 */
+                <<set _skRange = _sk.range !== undefined ? _sk.range : 1>>
+                <<inWeaponRange _me _wtgt.pos.x _wtgt.pos.y _skRange 0>>
+                <<if _inRange>>
+                  <<set _decided = { actionType:"physical", sourceId:_me.id, ref:_me.skill[_ai], targetCell:{ x:_wtgt.pos.x, y:_wtgt.pos.y } }>>
+                <</if>>
+              <<elseif _sk.targetMode === "thrust">>
+                /* 突刺：朝目标方向 */
+                <<set _skMaxD = _sk.maxDistance || 5>>
+                <<chebyshev _me.pos.x _me.pos.y _wtgt.pos.x _wtgt.pos.y>>
+                <<if _dist <= _skMaxD>>
+                  <<set _decided = { actionType:"physical", sourceId:_me.id, ref:_me.skill[_ai], targetCell:{ x:_wtgt.pos.x, y:_wtgt.pos.y } }>>
+                <</if>>
+              <<elseif _sk.targetMode === "self">>
+                /* 自身剑技(格挡)：残血时用 */
+                <<stat _me "maxHP">>
+                <<if _me.RemainHP < _stat * 0.5>>
+                  <<set _decided = { actionType:"physical", sourceId:_me.id, ref:_me.skill[_ai] }>>
+                <</if>>
+              <</if>>
+            <</if>>
+          <</if>>
+        <</for>>
+      <</if>>
+
+      /* 7.5: 投掷攻击道具 */
+      <<if _decided === null && _me.items && _me.items.length > 0>>
+        <<for _ai = 0; _ai < _me.items.length && _decided === null; _ai++>>
+          <<set _itD = $ArtificeLibrary[_me.items[_ai].id]>>
+          <<itemRole _itD>>
+          <<if _itemRole === "damage" || _itemRole === "debuff">>
+            <<canUseItem _itD _me>>
+            <<if _canUse && _wtgt.pos>>
+              /* 投掷射程(道具range缺省999) */
+              <<set _itRange = _itD.range !== undefined ? _itD.range : 999>>
+              <<inWeaponRange _me _wtgt.pos.x _wtgt.pos.y _itRange 0>>
+              <<if _inRange>>
+                <<set _decided = { actionType:"item", sourceId:_me.id, ref:_me.items[_ai].id, targetCell:{ x:_wtgt.pos.x, y:_wtgt.pos.y } }>>
+              <</if>>
+            <</if>>
+          <</if>>
+        <</for>>
+      <</if>>
+
+      /* 8: 普攻/重击(够得到则打，够不到走近) */
+      <<if _decided === null && _me.weapon>>
+        <<set _meAtkCost = _me.weapon.speedCost !== undefined ? _me.weapon.speedCost : 10>>
+        <<if _me.RemainSpeedLevel >= _meAtkCost>>
+          <<set _wRange = _me.weapon.range !== undefined ? _me.weapon.range : 1>>
+          <<set _wMin = _me.weapon.minRange || 0>>
+          <<inWeaponRange _me _wtgt.pos.x _wtgt.pos.y _wRange _wMin>>
+          <<if _inRange>>
+            /* 算重击级：基础武器伤害 */
+            <<set _wBase = _me.weapon.baseValue>>
+            <<if _me.weapon.scaling>><<set _wBase += _me[_me.weapon.scaling]>><</if>>
+            /* 最高可用重击级 = min(SpeedLevel门槛, 当前能付得起的级) */
+            <<stat _me "SpeedLevel">><<set _meMaxHeavy = Math.floor(_stat / 50)>>
+            <<set _meHeavy = 0>>
+            /* 若普攻杀不死，尝试用重击凑伤害 */
+            <<if _wBase < _wtgt.RemainHP && _meMaxHeavy > 0>>
+              /* 从高到低找能击杀且付得起的重击级 */
+              <<for _hv = _meMaxHeavy; _hv >= 1; _hv-->>
+                <<set _hvCost = _meAtkCost + 10 * (_hv + 1)>>
+                <<set _hvDmg = _wBase * (1 + _hv)>>
+                <<if _me.RemainSpeedLevel >= _hvCost && _hvDmg >= _wtgt.RemainHP>>
+                  <<set _meHeavy = _hv>><<break>>
+                <</if>>
+              <</for>>
+            <</if>>
+            <<set _decided = { actionType:"attack", sourceId:_me.id, targetCell:{ x:_wtgt.pos.x, y:_wtgt.pos.y }, heavyLevel:_meHeavy }>>
+          <<elseif _me.RemainSpeedLevel >= 10>>
+            <<stepToward _me _wtgt.pos.x _wtgt.pos.y>>
+            <<if _canStep>>
+              <<set _decided = { actionType:"move", sourceId:_me.id, targetCell:{ x:_stX, y:_stY } }>>
+            <</if>>
+          <</if>>
+        <</if>>
+      <</if>>
+
+
+    <</if>>
+  <</if>>
+<</widget>>
+
+
+
+/*
+  aiAct：AI单位的完整行动轮次。
+  刷新动作点 → 反复decideAction并执行，直到无法行动或安全上限。
+  普攻消耗RemainSpeedLevel；法术消耗在performAction内通过payCost扣RemainMagicLevel/RemainMP。
+  _args[0]=单位
+*/
+<<widget "aiAct">>
+  <<set _aaU = _args[0]>>
+  <<refreshActionPoints _aaU>>
+
+  <<for _aaN = 0; _aaN < 20; _aaN++>>
+    <<if _aaU.status !== "active">><<break>><</if>>
+    <<if _aaU.RemainMagicLevel <= 0 && _aaU.RemainSpeedLevel <= 0>><<break>><</if>>
+
+    /* 若敌方已无活目标且无倒下队友可复活、无受伤队友可治疗 → 停止 */
+    <<set _aaEnemyAlive = false>>
+    <<for _aaE = 0; _aaE < $Units.length; _aaE++>>
+      <<if $Units[_aaE].side !== _aaU.side && $Units[_aaE].status === "active">>
+        <<set _aaEnemyAlive = true>><<break>>
+      <</if>>
+    <</for>>
+    <<if not _aaEnemyAlive>><<break>><</if>>
+
+    <<decideAction _aaU>>
+    <<if _decided === null>><<break>><</if>>
+
+    <<if _decided.actionType === "attack">>
+      <<set _aaU.RemainSpeedLevel -= 1>>
+    <</if>>
+
+    <<performAction _decided>>
+    <<set $BattleTurnLog = $BattleTurnLog + $ActionLog + "\n">>
+  <</for>>
+  <<tickBuffs _aaU>>
+<</widget>>
+
+<<widget "showBattleField">>
+  <<set _sfAlly = $Units.filter(function(u){ return u.side === "ally" && !u.isFormation; })>>
+  <<set _sfEnemy = $Units.filter(function(u){ return u.side === "enemy" && !u.isFormation; })>>
+  <<set _sfFormation = $Units.filter(function(u){ return u.isFormation; })>>
+
+  <<set _sfSeer = $Units.find(function(u){ return u.isPlayer; })>>
+  <<set _sfCanSeeThrough = (_sfSeer && _sfSeer.special && _sfSeer.special.indexOf("seeThrough") !== -1)>>
+
+  <strong>【我方】</strong><br>
+  <<for _sfA = 0; _sfA < _sfAlly.length; _sfA++>>
+    <<set _sfU = _sfAlly[_sfA]>>
+    <<if _sfU.status === "active">>
+      <<stat _sfU "maxHP">><<set _sfMax = _stat>>
+      <<totalShield _sfU>><<set _sfSh = _totalShield>>
+      <<= _sfU.name>>　HP <<= _sfU.RemainHP>>/<<= _sfMax>><<if _sfSh > 0>>（盾<<= _sfSh>>）<</if>>
+      <<if $Field.grid && _sfU.pos>> @(<<= _sfU.pos.x>>,<<= _sfU.pos.y>>)<</if>>
+      <<if _sfU.buff.length > 0>>
+        ［<<for _sfB = 0; _sfB < _sfU.buff.length; _sfB++>><<= $BuffLibrary[_sfU.buff[_sfB].id].name>> <</for>>］
+      <</if>>
+    <<elseif _sfU.status === "defeated">>
+      <<= _sfU.name>>　<span style="opacity:0.5">已倒下</span>
+    <<else>>
+      <<= _sfU.name>>　<span style="opacity:0.4">已死亡</span>
+    <</if>>
+    <br>
+  <</for>>
+
+  <br><strong>【敌方】</strong><br>
+  <<for _sfE = 0; _sfE < _sfEnemy.length; _sfE++>>
+    <<set _sfU = _sfEnemy[_sfE]>>
+    <<if _sfU.status === "active">>
+      <<allyCanSee _sfU "ally">>
+      <<set _sfObsc = not _canSee>>
+      <<if _sfObsc>>
+        <<= _sfU.name>>：你看不清它的情况（烟雾笼罩）。
+      <<else>>
+        <<= _sfU.name>>
+        <<set _sfRatio = _sfU.RemainHP / _sfU.maxHP>>
+        <<if _sfRatio > 0.8>>状态良好
+        <<elseif _sfRatio > 0.5>>有些疲态
+        <<elseif _sfRatio > 0.25>>伤势严重
+        <<else>>岌岌可危
+        <</if>>
+        <<if $Field.grid && _sfU.pos>> @(<<= _sfU.pos.x>>,<<= _sfU.pos.y>>)<</if>>
+        <<if _sfU.buff.length > 0>>
+          ［<<for _sfB = 0; _sfB < _sfU.buff.length; _sfB++>><<= $BuffLibrary[_sfU.buff[_sfB].id].name>> <</for>>］
+        <</if>>
+      <</if>>
+    <<else>>
+      <<= _sfU.name>>　<span style="opacity:0.4">已倒下</span>
+    <</if>>
+    <br>
+  <</for>>
+<</widget>>
+
+
+/*
+  enlistUnit：把一个持久对象转成战斗单位并push进$Units。
+  _args[0]=持久对象  _args[1]=side("ally"/"enemy")  _args[2]=isPlayer(布尔,缺省false)
+  补齐运行时字段；status alive→active。
+*/
+<<widget "enlistUnit">>
+  <<set _enP = _args[0]>>
+  <<set _enSide = _args[1]>>
+  <<set _enIsPlayer = _args[2] === true>>
+
+  <<set _enStatus = (_enP.status === "alive") ? "active" : _enP.status>>
+
+  <<spawnUnit `{
+      name: _enP.name,
+      side: _enSide,
+      category: _enP.category || "humanlike",
+      traits: _enP.traits ? _enP.traits.slice() : [],
+      species: _enP.species || "",
+      special: _enP.special ? _enP.special.slice() : [],
+      status: _enStatus,
+      maxHP: _enP.maxHP, RemainHP: _enP.RemainHP,
+      maxMP: _enP.maxMP, RemainMP: _enP.RemainMP,
+      MagicLevel: _enP.MagicLevel, SpeedLevel: _enP.SpeedLevel,
+      atk: _enP.atk,
+      initiative: _enP.initiative !== undefined ? _enP.initiative : 10,
+      res: _enP.res ? clone(_enP.res) : { physical:0, magical:0, fire:0, ice:0 },
+      skill: _enP.skill ? _enP.skill.slice() : [],
+      spell: _enP.spell ? _enP.spell.slice() : [],
+      formation: _enP.formation ? _enP.formation.slice() : [],
+      items: _enP.items ? clone(_enP.items) : [],
+      weapon: _enP.weapon ? clone(_enP.weapon) : null,
+      level: _enP.level || 1,
+      expOverride: _enP.expOverride !== undefined ? _enP.expOverride : null
+  }`>>
+
+  /* 显式设置，不依赖反引号内变量 */
+  <<set _enLast = $Units[$Units.length - 1]>>
+  <<set _enLast.isPlayer = _enIsPlayer>>
+  <<set _enLast.originId = _enP.originId>>
+<</widget>>
+
+
+
+/*
+  writeBackUnit：把战斗单位的结果写回其持久对象。
+  按originId查找$Player或$PersistNPC。无originId的(杂兵)跳过。
+  _args[0]=战斗单位
+*/
+<<widget "writeBackUnit">>
+  <<set _wbU = _args[0]>>
+  <<if _wbU.originId>>
+    <<if _wbU.originId === "player">>
+      <<set _wbP = $Player>>
+    <<else>>
+      <<set _wbP = $PersistNPC[_wbU.originId]>>
+    <</if>>
+    <<if _wbP>>
+      <<set _wbP.RemainHP = _wbU.RemainHP>>
+      <<set _wbP.RemainMP = _wbU.RemainMP>>
+      <<set _wbP.items = clone(_wbU.items)>>
+      /* 战斗内status回写为持久语义 */
+      <<if _wbU.status === "active">>
+        <<set _wbP.status = "alive">>
+      <<else>>
+        <<set _wbP.status = _wbU.status>>
+      <</if>>
+    <</if>>
+  <</if>>
+<</widget>>
+
+
+/*
+  expFromUnit：计算击败某敌人单位获得的经验，放 _expVal。
+  expOverride非null则用它；否则 level*10。未死亡(defeated)的×0.7。
+  _args[0]=敌方战斗单位
+*/
+<<widget "expFromUnit">>
+  <<set _efU = _args[0]>>
+  <<if _efU.expOverride !== null && _efU.expOverride !== undefined>>
+    <<set _expVal = _efU.expOverride>>
+  <<else>>
+    <<set _expVal = (_efU.level || 1) * 10>>
+  <</if>>
+  <<if _efU.status === "defeated">>
+    <<set _expVal = Math.round(_expVal * 0.7)>>
+  <</if>>
+<</widget>>
+
+
+/*
+  settleBattle：战斗结束结算。
+  - 计算所有被击败敌人(status!=="active")的总经验
+  - 全额给所有存活ally的持久对象累加exp
+  - 把所有有originId的ally单位结果写回持久对象
+  应在跳转BattleWin前调用。结果总经验放 $BattleResult.expGained。
+*/
+<<widget "settleBattle">>
+  /* 累计经验 */
+  <<set _sbExp = 0>>
+  <<for _sb = 0; _sb < $Units.length; _sb++>>
+    <<if $Units[_sb].side === "enemy" && $Units[_sb].status !== "active">>
+      <<expFromUnit $Units[_sb]>>
+      <<set _sbExp += _expVal>>
+    <</if>>
+  <</for>>
+  <<set $BattleResult.expGained = _sbExp>>
+
+  /* 写回ally持久对象 + 全额给经验给存活ally */
+  <<for _sb = 0; _sb < $Units.length; _sb++>>
+    <<set _sbU = $Units[_sb]>>
+    <<if _sbU.side === "ally">>
+      <<writeBackUnit _sbU>>
+      /* 经验只给存活的(active)ally */
+      <<if _sbU.status === "active" && _sbU.originId>>
+        <<if _sbU.originId === "player">>
+          <<set $Player.exp += _sbExp>>
+        <<elseif $PersistNPC[_sbU.originId]>>
+          <<set $PersistNPC[_sbU.originId].exp += _sbExp>>
+        <</if>>
+      <</if>>
+    <</if>>
+  <</for>>
+<</widget>>
+
+
+/*
+  checkLevelUp：检测并执行升级（供PassageReady调用，对任意持久对象通用）。
+  exp达到阈值则level+1并扣除阈值经验，可连升。
+  属性成长公式留待你填（标注处）。
+  _args[0]=持久对象（$Player 或 $PersistNPC[x]）
+*/
+<<widget "checkLevelUp">>
+  <<set _luP = _args[0]>>
+  <<for _luGuard = 0; _luGuard < 1000; _luGuard++>>
+    <<set _luNeed = Math.round(10 * Math.pow(1.05, _luP.level - 1))>>
+    <<if _luP.exp >= _luNeed>>
+      <<set _luP.exp -= _luNeed>>
+      <<set _luP.level += 1>>
+
+      /* 本级获得的属性点 */
+      <<set _luGain = Math.round(5 * Math.pow(1.1, _luP.level - 1))>>
+
+      <<if _luP.growth>>
+        /* NPC：按比例自动分配 */
+        <<set _luKeys = Object.keys(_luP.growth)>>
+        <<for _luI = 0; _luI < _luKeys.length; _luI++>>
+          <<set _luStat = _luKeys[_luI]>>
+          <<set _luAdd = Math.floor(_luGain * _luP.growth[_luStat])>>
+          <<set _luP[_luStat] += _luAdd>>
+          /* 若加的是上限类，可选同步当前值，这里只加基础值 */
+        <</for>>
+      <<else>>
+        /* 玩家：累积自由点 */
+        <<if _luP.freePoints === undefined>><<set _luP.freePoints = 0>><</if>>
+        <<set _luP.freePoints += _luGain>>
+      <</if>>
+
+    <<else>>
+      <<break>>
+    <</if>>
+  <</for>>
+<</widget>>
+
+/*
+  setupCheatBattle：快速布置一场测试战斗。
+  _args[0]=哥布林数量 _args[1]=是否额外加一个敌法师(布尔)
+  需调用前已设好$BuffLibrary/$SpellLibrary。
+*/
+<<widget "setupCheatBattle">>
+    /* 玩家入场前确保有战斗手段 */
+  <<if not $Player.weapon>>
+    <<set $Player.weapon = clone($WeaponLibrary.shortSword)>>
+  <</if>>
+  <<if $Player.spell.length === 0>>
+    <<set $Player.spell = ["damage","freeze","heal"]>>
+  <</if>>
+  <<if not $Player.formation || $Player.formation.length === 0>>
+    <<set $Player.formation = ["DivineProtection"]>>
+  <</if>>
+
+  <<set $Player.RemainHP = $Player.maxHP>>
+
+  <<set _scbN = _args[0]>>
+  <<set _scbMage = _args[1] === true>>
+
+  <<set $Units = []>>
+  <<set $UnitIdCounter = 0>>
+  <<set $ActionLog = "">>
+  <<set $BattleTurnLog = "">>
+  <<set $ActiveActorId = "">>
+  <<set $PendingSpell = "">>
+  <<set $CastLevelChoice = 1>>
+  <<set $BattleResult = { defeated:[], expGained:0 }>>
+
+  /* 玩家入场（确保回满，便于测试） */
+  <<set $Player.RemainHP = $Player.maxHP>>
+  <<set $Player.RemainMP = $Player.maxMP>>
+  <<set $Player.status = "alive">>
+  <<enlistUnit $Player "ally" true>>
+
+  /* 哥布林 */
+  <<for _scbI = 0; _scbI < _scbN; _scbI++>>
+    <<spawnUnit `{ name:"哥布林" + (_scbI+1), side:"enemy", type:"monster", maxHP:60, RemainHP:60, maxMP:0, RemainMP:0, MagicLevel:0, SpeedLevel:30, initiative:8, atk:6, level:2, weapon:{name:"棍棒",wtype:"club",damageType:"physical",element:"none",baseValue:6,scaling:"atk",range:1,items:[{id:"healPotion",count:1}]} }`>>
+  <</for>>
+
+  /* 可选敌法师 */
+  <<if _scbMage>>
+    <<spawnUnit `{ name:"敌法师", side:"enemy", category:"humanlike", maxHP:200, RemainHP:200, maxMP:500, RemainMP:500, MagicLevel:20, SpeedLevel:40, initiative:10, atk:5, level:8, spell:["damage","meteor","freeze","heal"], formation:["FrostField"], skill:["doubleStrike","guard"], weapon:{name:"杖",wtype:"staff",damageType:"physical",element:"none",baseValue:5,scaling:"atk",range:1,speedCost:10}, items:[{id:"fireBomb",count:2}] }`>>
+  <</if>>
+
+  <<set $BattleWin = "Cheat Menu">>
+  <<set $BattleLose = "Cheat Menu">>
+  <<set $BattleFlee = "Cheat Menu">>
+  
+  <<set $Field = { buff:[], triggers:[], tick:0, round:1, grid:null }>>
+  <<if $CheatUseFixedMap && $MapLibrary[$CheatUseFixedMap]>>
+    <<loadMap $CheatUseFixedMap>>
+  <<else>>
+    <<generateGrid `[$CheatTerrain]`>>
+  <</if>>
+  <<placeUnitsOnGrid>>
+
+  <<goto "Battle">>
+<</widget>>
+
+/*
+  castFormation：释放法阵（performAction的formation分支调用）。
+  扣cost → 执行onForm → spawnFormation加入$Units参与ATB。
+  _args[0]=施阵者单位 _args[1]=formationId _args[2]=castingLevel
+*/
+<<widget "castFormation">>
+  <<set _cfCaster = _args[0]>>
+  <<set _cfId = _args[1]>>
+  <<set _cfLv = _args[2]>>
+  <<set _cfCell = _args[3]>>    /* 选格法阵的中心格，缺省用施法者位置 */
+  <<set _cfDef = $FormationLibrary[_cfId]>>
+
+  /* 扣cost */
+  <<for _cf = 0; _cf < _cfDef.cost.length; _cf++>>
+    <<set _cfCost = _cfDef.cost[_cf]>>
+    <<if _cfCost.scaling === "CastingLevel">>
+      <<set _cfCaster[_cfCost.res] -= _cfCost.value * _cfLv>>
+    <<else>>
+      <<set _cfCaster[_cfCost.res] -= _cfCost.value>>
+    <</if>>
+  <</for>>
+
+  /* 生成法阵单位 */
+  <<finalInitiative _cfCaster>>
+  <<set _cfInit = Math.round(_fi * _cfDef.initiativeFactor)>>
+  <<if _cfInit < 1>><<set _cfInit = 1>><</if>>
+
+  <<spawnUnit `{
+      name: _cfDef.name,
+      side: _cfCaster.side,
+      category: "formation",
+      status: "active",
+      maxHP: 1, RemainHP: 1, maxMP: 0, RemainMP: 0,
+      MagicLevel: 0, SpeedLevel: 0,
+      atk: 0,
+      initiative: _cfInit
+  }`>>
+  <<set _cfUnit = $Units[$Units.length - 1]>>
+  <<set _cfUnit.isFormation = true>>
+  <<set _cfUnit.formationData = {
+      formationId: _cfId,
+      casterId: _cfCaster.id,
+      castingLevel: _cfLv,
+      upkeepPool: _cfDef.upkeepPerLevel * _cfLv,
+      turns: 0,
+      centerCell: _cfCell || (_cfCaster.pos ? { x:_cfCaster.pos.x, y:_cfCaster.pos.y } : null)
+  }>>
+
+  /* 立即执行onForm */
+  <<runFormationEffects _cfUnit _cfDef.onForm>>
+
+  <<set $ActionLog = _cfCaster.name + "布置了法阵【" + _cfDef.name + "】。">>
+<</widget>>
+
+
+/*
+  runFormationEffects：执行一组法阵效果(onForm/onTurn)。
+  _args[0]=法阵单位 _args[1]=效果数组
+  effect kinds:
+    "buff":   { target, buffId, duration, valuePerLevel?, linked }
+              valuePerLevel存在则作为护盾值载体；linked=true则标记linkedFormation
+    "shield": { target, valuePerLevel, capPerLevel }  补护盾到上限
+  target: "allySide"(法阵同侧全体active非法阵) / "enemySide" / "caster"
+*/
+<<widget "runFormationEffects">>
+  <<set _rfeUnit = _args[0]>>
+  <<set _rfeEffs = _args[1]>>
+  <<set _rfeLv = _rfeUnit.formationData.castingLevel>>
+  <<set _rfeUnitId = _rfeUnit.id>>
+
+  <<for _rfe = 0; _rfe < _rfeEffs.length; _rfe++>>
+    <<set _rfeE = _rfeEffs[_rfe]>>
+
+    /* ---- buff / shield：基于target解析单位列表 ---- */
+    <<if _rfeE.kind === "buff" or _rfeE.kind === "shield">>
+      <<set _rfeTargets = []>>
+      <<if _rfeE.target === "allySide">>
+        <<for _rfeT = 0; _rfeT < $Units.length; _rfeT++>>
+          <<if $Units[_rfeT].side === _rfeUnit.side && $Units[_rfeT].status === "active" && not $Units[_rfeT].isFormation>>
+            <<run _rfeTargets.push($Units[_rfeT])>>
+          <</if>>
+        <</for>>
+      <<elseif _rfeE.target === "enemySide">>
+        <<for _rfeT = 0; _rfeT < $Units.length; _rfeT++>>
+          <<if $Units[_rfeT].side !== _rfeUnit.side && $Units[_rfeT].status === "active" && not $Units[_rfeT].isFormation>>
+            <<run _rfeTargets.push($Units[_rfeT])>>
+          <</if>>
+        <</for>>
+      <<elseif _rfeE.target === "caster">>
+        <<findUnit _rfeUnit.formationData.casterId>>
+        <<if _foundUnit>><<run _rfeTargets.push(_foundUnit)>><</if>>
+      <</if>>
+
+      <<for _rfeT = 0; _rfeT < _rfeTargets.length; _rfeT++>>
+        <<set _rfeTgt = _rfeTargets[_rfeT]>>
+        <<if _rfeE.kind === "buff">>
+          <<set _rfeShieldVal = (_rfeE.valuePerLevel !== undefined) ? _rfeE.valuePerLevel * _rfeLv : null>>
+          <<applyBuff _rfeTgt `{ buffId:_rfeE.buffId, duration:_rfeE.duration, stackPerLevel:1, castingLevel:_rfeLv, shield:_rfeShieldVal }`>>
+          <<if _rfeE.linked>>
+            <<set _rfeLast = _rfeTgt.buff[_rfeTgt.buff.length - 1]>>
+            <<set _rfeLast.linkedFormation = _rfeUnitId>>
+          <</if>>
+        <<else>>
+          /* shield：补到上限 */
+          <<set _rfeCap = _rfeE.capPerLevel * _rfeLv>>
+          <<set _rfeAddTo = null>>
+          <<for _rfeB = 0; _rfeB < _rfeTgt.buff.length; _rfeB++>>
+            <<if _rfeTgt.buff[_rfeB].linkedFormation === _rfeUnitId && _rfeTgt.buff[_rfeB].shield !== null && _rfeTgt.buff[_rfeB].shield !== undefined>>
+              <<set _rfeAddTo = _rfeTgt.buff[_rfeB]>><<break>>
+            <</if>>
+          <</for>>
+          <<if _rfeAddTo !== null>>
+            <<set _rfeAddTo.shield += _rfeE.valuePerLevel * _rfeLv>>
+            <<if _rfeAddTo.shield > _rfeCap>><<set _rfeAddTo.shield = _rfeCap>><</if>>
+          <</if>>
+        <</if>>
+      <</for>>
+
+    /* ---- areaBuff：以centerCell为中心范围内加buff ---- */
+    <<elseif _rfeE.kind === "areaBuff">>
+      <<if _rfeUnit.formationData.centerCell>>
+        <<set _rfeCx = _rfeUnit.formationData.centerCell.x>>
+        <<set _rfeCy = _rfeUnit.formationData.centerCell.y>>
+        <<set _rfeDef2 = $FormationLibrary[_rfeUnit.formationData.formationId]>>
+        <<set _rfeBase = _rfeDef2.aoeBase !== undefined ? _rfeDef2.aoeBase : 1>>
+        <<set _rfeRad = _rfeBase + Math.floor(Math.log(_rfeLv) / Math.log(2))>>
+        <<set _rfeWantEnemy = (_rfeE.side === "enemy")>>
+        <<for _rfeAi = 0; _rfeAi < $Units.length; _rfeAi++>>
+          <<set _rfeAu = $Units[_rfeAi]>>
+          <<if _rfeAu.status === "active" && not _rfeAu.isFormation && _rfeAu.pos>>
+            <<chebyshev _rfeCx _rfeCy _rfeAu.pos.x _rfeAu.pos.y>>
+            <<if _dist <= _rfeRad>>
+              <<set _rfeSideMatch = false>>
+              <<if _rfeWantEnemy && _rfeAu.side !== _rfeUnit.side>><<set _rfeSideMatch = true>>
+              <<elseif not _rfeWantEnemy && _rfeAu.side === _rfeUnit.side>><<set _rfeSideMatch = true>>
+              <</if>>
+              <<if _rfeSideMatch>>
+                <<applyBuff _rfeAu `{ buffId:_rfeE.buffId, duration:_rfeE.duration, stackPerLevel:1, castingLevel:_rfeLv }`>>
+              <</if>>
+            <</if>>
+          <</if>>
+        <</for>>
+      <</if>>
+
+    /* ---- summon：召唤单位 ---- */
+    <<elseif _rfeE.kind === "summon">>
+      <<set _rfeDoSummon = false>>
+      <<if _rfeUnit.formationData.turns >= (_rfeE.onTurnEq !== undefined ? _rfeE.onTurnEq : 0)>>
+        <<if not _rfeUnit.formationData.summoned>>
+          <<set _rfeDoSummon = true>>
+        <</if>>
+      <</if>>
+      <<if _rfeDoSummon>>
+        <<set _rfeUnit.formationData.summoned = true>>
+        <<set _rfeSpawnArg = clone(_rfeE.unit)>>
+        <<set _rfeSpawnArg.side = _rfeUnit.side>>
+        <<spawnUnit _rfeSpawnArg>>
+        <<set _rfeNew = $Units[$Units.length - 1]>>
+        <<if $Field.grid>>
+          <<findUnit _rfeUnit.formationData.casterId>>
+          <<if _foundUnit && _foundUnit.pos>>
+            <<placeNearCell _rfeNew _foundUnit.pos.x _foundUnit.pos.y>>
+          <<else>>
+            <<placeNearCell _rfeNew 0 0>>
+          <</if>>
+        <</if>>
+        <<set $ActionLog = "法阵召唤出了" + _rfeNew.name + "！">>
+      <</if>>
+
+    /* ---- teleportTo：传送施法者到centerCell ---- */
+    <<elseif _rfeE.kind === "teleportTo">>
+      <<findUnit _rfeUnit.formationData.casterId>>
+      <<if _foundUnit && _rfeUnit.formationData.centerCell>>
+        <<set _ttCx = _rfeUnit.formationData.centerCell.x>>
+        <<set _ttCy = _rfeUnit.formationData.centerCell.y>>
+        <<cellAt _ttCx _ttCy>><<set _ttCell = _cell>>
+        <<unitAtCell _ttCx _ttCy>>
+        <<if _ttCell && _ttCell.occupiable && _ttCell.elevation !== "verylow" && _cellUnit === null>>
+          <<set _foundUnit.pos = { x:_ttCx, y:_ttCy }>>
+          <<refreshStandBuff _foundUnit>>
+          <<set $ActionLog = _foundUnit.name + "传送到了(" + _ttCx + "," + _ttCy + ")。">>
+        <<else>>
+          <<set $ActionLog = "传送目标格无法落脚，传送失败。">>
+        <</if>>
+      <</if>>
+    
+    <<elseif _rfeE.kind === "teamEscape">>
+      <<if _rfeUnit.formationData.turns >= (_rfeE.onTurnEq !== undefined ? _rfeE.onTurnEq : 1)>>
+        <<teleportEscape>>
+      <</if>>
+
+
+    <</if>>
+  <</for>>
+<</widget>>
+
+
+
+/*
+  formationTurn：法阵被ATB轮到时的处理。
+  执行onTurn → turns+1 → 检查消散条件(maxTurns/requireCaster) → 扣行动条。
+  注意：upkeepPool的tick消耗在tickField里处理(每tick扣)，此处只处理行动相关。
+  _args[0]=法阵单位
+*/
+<<widget "formationTurn">>
+  <<set _ftUnit = _args[0]>>
+  <<set _ftDef = $FormationLibrary[_ftUnit.formationData.formationId]>>
+
+  <<set _ftUnit.formationData.turns += 1>>
+  <<runFormationEffects _ftUnit _ftDef.onTurn>>
+  <<set $ActionLog = "法阵【" + _ftDef.name + "】运转。">>
+
+  <<set _ftDispel = false>>
+  <<if _ftDef.maxTurns !== null && _ftUnit.formationData.turns >= _ftDef.maxTurns>>
+    <<set _ftDispel = true>>
+  <</if>>
+  <<if _ftDef.requireCaster>>
+    <<findUnit _ftUnit.formationData.casterId>>
+    <<if not _foundUnit or _foundUnit.status !== "active">>
+      <<set _ftDispel = true>>
+    <</if>>
+  <</if>>
+  <<if _ftDispel>>
+    <<dispelFormation _ftUnit>>
+  <</if>>
+<</widget>>
+
+
+
+/*
+  dispelFormation：消散一个法阵。移除其linked的buff，从$Units移除该法阵。
+  _args[0]=法阵单位
+*/
+<<widget "dispelFormation">>
+  <<set _dfUnit = _args[0]>>
+  <<set _dfId = _dfUnit.id>>
+  <<set _dfDef = $FormationLibrary[_dfUnit.formationData.formationId]>>
+
+  /* 移除所有单位身上linkedFormation==此法阵的buff */
+  <<for _df = 0; _df < $Units.length; _df++>>
+    <<set _dfU = $Units[_df]>>
+    <<set _dfKept = []>>
+    <<for _dfB = 0; _dfB < _dfU.buff.length; _dfB++>>
+      <<if _dfU.buff[_dfB].linkedFormation !== _dfId>>
+        <<run _dfKept.push(_dfU.buff[_dfB])>>
+      <</if>>
+    <</for>>
+    <<set _dfU.buff = _dfKept>>
+  <</for>>
+
+  /* 从$Units移除法阵 */
+  <<set _dfNew = []>>
+  <<for _df = 0; _df < $Units.length; _df++>>
+    <<if $Units[_df].id !== _dfId>>
+      <<run _dfNew.push($Units[_df])>>
+    <</if>>
+  <</for>>
+  <<set $Units = _dfNew>>
+
+  <<set $ActionLog = "法阵【" + _dfDef.name + "】消散了。">>
+<</widget>>
+
+/*
+  unitItemCount：单位某道具的持有数量，放 _itemCount。_args[0]=单位 _args[1]=itemId
+*/
+<<widget "unitItemCount">>
+  <<set _icU = _args[0]>>
+  <<set _itemCount = 0>>
+  <<if _icU.items>>
+    <<for _ic = 0; _ic < _icU.items.length; _ic++>>
+      <<if _icU.items[_ic].id === _args[1]>>
+        <<set _itemCount = _icU.items[_ic].count>>
+        <<break>>
+      <</if>>
+    <</for>>
+  <</if>>
+<</widget>>
+
+
+/*
+  consumeItem：扣除单位一个道具。_args[0]=单位 _args[1]=itemId
+*/
+<<widget "consumeItem">>
+  <<set _ciU = _args[0]>>
+  <<if _ciU.items>>
+    <<set _ciKept = []>>
+    <<for _ci = 0; _ci < _ciU.items.length; _ci++>>
+      <<set _ciEntry = _ciU.items[_ci]>>
+      <<if _ciEntry.id === _args[1]>>
+        <<set _ciEntry.count -= 1>>
+      <</if>>
+      <<if _ciEntry.count > 0>>
+        <<run _ciKept.push(_ciEntry)>>
+      <</if>>
+    <</for>>
+    <<set _ciU.items = _ciKept>>
+  <</if>>
+<</widget>>
+
+
+/*
+  canUseItem：检查使用者能否支付道具的actionCost，放 _canUse。
+  _args[0]=道具数据 _args[1]=使用者单位
+*/
+<<widget "canUseItem">>
+  <<set _cuItem = _args[0]>>
+  <<set _cuUser = _args[1]>>
+  <<set _canUse = true>>
+  <<if _cuItem.actionCost>>
+    <<for _cu = 0; _cu < _cuItem.actionCost.length; _cu++>>
+      <<set _cuC = _cuItem.actionCost[_cu]>>
+      <<if _cuUser[_cuC.res] < _cuC.value>>
+        <<set _canUse = false>>
+      <</if>>
+    <</for>>
+  <</if>>
+<</widget>>
+
+
+/*
+  useItem：使用一个道具（performAction的item分支调用）。
+  扣actionCost → 扣库存 → 按useType执行效果。
+  _args[0]=使用者单位 _args[1]=itemId _args[2]=chosenIds(throw/部分用)
+  useType:
+    drink  —— 对自己执行onUse
+    throw  —— 按targeting选目标，对每个执行onUse
+    cast   —— 用道具infusedMP代替施法者mp释放spellRef
+    formation —— 用道具直接布阵(formationRef, infusedLevel作CastingLevel)，不耗施法者mp
+*/
+<<widget "useItem">>
+  <<set _uiUser = _args[0]>>
+  <<set _uiId = _args[1]>>
+  <<set _uiCell = _args[2]>>
+  <<set _uiItem = $ArtificeLibrary[_uiId]>>
+
+  /* 扣行动消耗 */
+  <<for _ui = 0; _ui < _uiItem.actionCost.length; _ui++>>
+    <<set _uiC = _uiItem.actionCost[_ui]>>
+    <<set _uiUser[_uiC.res] -= _uiC.value>>
+  <</for>>
+
+  /* 扣库存 */
+  <<consumeItem _uiUser _uiId>>
+
+  <<switch _uiItem.useType>>
+
+    <<case "drink">>
+      <<runOnHit _uiUser _uiItem.onUse _uiUser 1 1>>
+      <<set $ActionLog = _uiUser.name + "使用了" + _uiItem.name + "。">>
+
+    <<case "throw">>
+      /* 投到格子。obscure类对该格中心生效；伤害/buff对该格单位生效；
+         若targeting是all/范围，以该格为中心radius */
+      <<set _uiTcx = _uiCell.x>>
+      <<set _uiTcy = _uiCell.y>>
+      /* 判断onUse是否含范围/obscure */
+      <<set _uiAreaR = _uiItem.areaRadius !== undefined ? _uiItem.areaRadius : 0>>
+      <<if _uiAreaR > 0>>
+        /* 范围投掷：对中心radius内敌方 */
+        <<unitsInArea _uiTcx _uiTcy _uiAreaR "enemy" _uiUser>>
+        <<set _uiTc = _areaUnits.length>>
+        <<for _ui = 0; _ui < _areaUnits.length; _ui++>>
+          <<runOnHit _areaUnits[_ui] _uiItem.onUse _uiUser 1 _uiTc>>
+        <</for>>
+      <<else>>
+        /* 单格投掷：obscure对格中心(用onHit的obscure处理需要目标pos)，
+           其余对格上单位 */
+        <<unitAtCell _uiTcx _uiTcy>>
+        /* 即使格上无单位，obscure类也要生效——构造一个伪目标承载pos */
+        <<set _uiHasObscure = false>>
+        <<for _ui = 0; _ui < _uiItem.onUse.length; _ui++>>
+          <<if _uiItem.onUse[_ui].kind === "obscure">><<set _uiHasObscure = true>><</if>>
+        <</for>>
+        <<if _uiHasObscure>>
+          /* 直接对格中心设obscure（不依赖单位） */
+          <<for _ui = 0; _ui < _uiItem.onUse.length; _ui++>>
+            <<if _uiItem.onUse[_ui].kind === "obscure">>
+              <<set _uiObR = _uiItem.onUse[_ui].radius !== undefined ? _uiItem.onUse[_ui].radius : 1>>
+              <<for _uiOY = _uiTcy - _uiObR; _uiOY <= _uiTcy + _uiObR; _uiOY++>>
+                <<for _uiOX = _uiTcx - _uiObR; _uiOX <= _uiTcx + _uiObR; _uiOX++>>
+                  <<cellAt _uiOX _uiOY>>
+                  <<if _cell>><<set _cell.obscured = true>><</if>>
+                <</for>>
+              <</for>>
+            <</if>>
+          <</for>>
+        <</if>>
+        /* 对格上单位施加非obscure效果 */
+        <<if _cellUnit>>
+          <<runOnHit _cellUnit _uiItem.onUse _uiUser 1 1>>
+        <</if>>
+      <</if>>
+      <<set $ActionLog = _uiUser.name + "投掷了" + _uiItem.name + "。">>
+
+    <<case "cast">>
+      <<set _uiSpell = $SpellLibrary[_uiItem.spellRef]>>
+      <<set _uiLv = _uiItem.castingLevel || 1>>
+      /* 用道具在目标格施法（单体打格上敌人；友方法术对格上友方） */
+      <<unitAtCell _uiCell.x _uiCell.y>>
+      <<if _cellUnit>>
+        <<runOnHit _cellUnit _uiSpell.onHit _uiUser _uiLv 1>>
+        <<set $ActionLog = _uiUser.name + "借助" + _uiItem.name + "施放了" + _uiSpell.name + "。">>
+      <<else>>
+        <<set $ActionLog = _uiUser.name + "的" + _uiItem.name + "落空了。">>
+      <</if>>
+
+    <<case "formation">>
+      /* 法阵布在使用者当前位置(或目标格)，这里布在使用者处 */
+      <<useItemFormation _uiUser _uiItem>>
+      <<set $ActionLog = _uiUser.name + "启动了" + _uiItem.name + "，法阵成形。">>
+
+  <</switch>>
+<</widget>>
+
+
+
+/*
+  useItemFormation：道具布阵专用——生成法阵但不扣施法者cost，等级用道具infusedLevel。
+  _args[0]=使用者 _args[1]=道具数据
+*/
+<<widget "useItemFormation">>
+  <<set _uifUser = _args[0]>>
+  <<set _uifItem = _args[1]>>
+  <<set _uifDef = $FormationLibrary[_uifItem.formationRef]>>
+  <<set _uifLv = _uifItem.infusedLevel || 1>>
+
+  <<finalInitiative _uifUser>>
+  <<set _uifInit = Math.round(_fi * _uifDef.initiativeFactor)>>
+  <<if _uifInit < 1>><<set _uifInit = 1>><</if>>
+
+  <<spawnUnit `{
+      name: _uifDef.name,
+      side: _uifUser.side,
+      category: "formation",
+      status: "active",
+      maxHP: 1, RemainHP: 1, maxMP: 0, RemainMP: 0,
+      MagicLevel: 0, SpeedLevel: 0, atk: 0,
+      initiative: _uifInit
+  }`>>
+  <<set _uifUnit = $Units[$Units.length - 1]>>
+  <<set _uifUnit.isFormation = true>>
+  <<set _uifUnit.formationData = {
+      formationId: _uifItem.formationRef,
+      casterId: _uifUser.id,
+      castingLevel: _uifLv,
+      upkeepPool: _uifDef.upkeepPerLevel * _uifLv,
+      turns: 0
+  }>>
+  <<runFormationEffects _uifUnit _uifDef.onForm>>
+<</widget>>
+
+/*
+  cheatTargetPlayer：返回作弊应作用的对象。
+  若战斗中存在玩家战斗单位(originId==="player")，返回该战斗单位；否则返回$Player持久对象。
+  结果放 _cheatTarget。这样作弊菜单统一改 _cheatTarget 即可。
+*/
+<<widget "cheatTargetPlayer">>
+  <<set _cheatTarget = null>>
+  <<if $Units && $Units.length > 0>>
+    <<for _ct = 0; _ct < $Units.length; _ct++>>
+      <<if $Units[_ct].originId === "player" && $Units[_ct].status !== "dead">>
+        <<set _cheatTarget = $Units[_ct]>>
+        <<break>>
+      <</if>>
+    <</for>>
+  <</if>>
+  <<if _cheatTarget === null>>
+    <<set _cheatTarget = $Player>>
+  <</if>>
+<</widget>>
+
+/*
+  cheatSetStat：作弊修改属性，同时改$Player和场上玩家战斗单位(若在战斗中)。
+  _args[0]=属性名 _args[1]=增量(可负)
+  下限保护：结果不低于0(部分属性)。
+*/
+<<widget "cheatSetStat">>
+  <<set _csKey = _args[0]>>
+  <<set _csDelta = Number(_args[1])>>
+
+  <<set $Player[_csKey] = Number($Player[_csKey]) + _csDelta>>
+  <<if $Player[_csKey] < 0>><<set $Player[_csKey] = 0>><</if>>
+
+  <<if $Units && $Units.length > 0>>
+    <<for _cssI = 0; _cssI < $Units.length; _cssI++>>
+      <<if $Units[_cssI].originId === "player" && $Units[_cssI].status !== "dead">>
+        <<if $Units[_cssI][_csKey] !== undefined>>
+          <<set $Units[_cssI][_csKey] = Number($Units[_cssI][_csKey]) + _csDelta>>
+          <<if $Units[_cssI][_csKey] < 0>><<set $Units[_cssI][_csKey] = 0>><</if>>
+        <</if>>
+      <</if>>
+    <</for>>
+  <</if>>
+<</widget>>
+
+
+
+/*
+  cheatSetRes：同上，但改抗性 res.xxx。_args[0]=抗性key _args[1]=增量
+*/
+<<widget "cheatSetRes">>
+  <<set _crKey = _args[0]>>
+  <<set _crDelta = Number(_args[1])>>
+  <<set $Player.res[_crKey] = Number($Player.res[_crKey]) + _crDelta>>
+  <<if $Units && $Units.length > 0>>
+    <<for _crsI = 0; _crsI < $Units.length; _crsI++>>
+      <<if $Units[_crsI].originId === "player" && $Units[_crsI].status !== "dead">>
+        <<if $Units[_crsI].res && $Units[_crsI].res[_crKey] !== undefined>>
+          <<set $Units[_crsI].res[_crKey] = Number($Units[_crsI].res[_crKey]) + _crDelta>>
+        <</if>>
+      <</if>>
+    <</for>>
+  <</if>>
+<</widget>>
+
+
+/*
+  cheatSyncArrays：把$Player的spell/formation/items同步到场上玩家战斗单位。
+  作弊菜单改完$Player这些数组后调用一次。
+*/
+<<widget "cheatSyncArrays">>
+  <<if $Units && $Units.length > 0>>
+    /* 确保$Player这些字段存在 */
+    <<if not $Player.spell>><<set $Player.spell = []>><</if>>
+    <<if not $Player.formation>><<set $Player.formation = []>><</if>>
+    <<if not $Player.items>><<set $Player.items = []>><</if>>
+    <<if not $Player.skill>><<set $Player.skill = []>><</if>>
+
+    <<for _ca = 0; _ca < $Units.length; _ca++>>
+      <<if $Units[_ca].originId === "player" && $Units[_ca].status !== "dead">>
+        <<set $Units[_ca].spell = $Player.spell.slice()>>
+        <<set $Units[_ca].formation = $Player.formation.slice()>>
+        <<set $Units[_ca].items = clone($Player.items)>>
+        <<set $Units[_ca].skill = $Player.skill.slice()>>
+        <<set $Units[_ca].weapon = $Player.weapon ? clone($Player.weapon) : null>>
+      <</if>>
+    <</for>>
+  <</if>>
+<</widget>>
+
+
+
+/*
+  cellAt：取grid中(x,y)的格子对象，放 _cell（越界或无地图为null）。
+  _args[0]=x _args[1]=y
+*/
+<<widget "cellAt">>
+  <<set _cell = null>>
+  <<if $Field.grid>>
+    <<set _gx = _args[0]>>
+    <<set _gy = _args[1]>>
+    <<if _gx >= 0 && _gx < $Field.grid.width && _gy >= 0 && _gy < $Field.grid.height>>
+      <<set _cell = $Field.grid.cells[_gy * $Field.grid.width + _gx]>>
+    <</if>>
+  <</if>>
+<</widget>>
+
+
+/*
+  chebyshev：两点切比雪夫距离，放 _dist。_args[0..3]=x1,y1,x2,y2
+*/
+<<widget "chebyshev">>
+  <<set _dx = Math.abs(_args[0] - _args[2])>>
+  <<set _dy = Math.abs(_args[1] - _args[3])>>
+  <<set _dist = Math.max(_dx, _dy)>>
+<</widget>>
+
+
+/*
+  canMoveTo：判断单位能否从当前位置移动到(tx,ty)，放 _canMove 和 _moveCost。
+  规则：
+   - 必须相邻(切比雪夫=1)
+   - 目标格occupiable
+   - verylow只有fly单位可进
+   - high必须从mid/high出发
+   - 消耗：基础10，目标high额外+5，进verylow(fly)额外+5
+  _args[0]=单位 _args[1]=tx _args[2]=ty
+*/
+<<widget "canMoveTo">>
+  <<set _cmU = _args[0]>>
+  <<set _cmTx = _args[1]>>
+  <<set _cmTy = _args[2]>>
+  <<set _canMove = false>>
+  <<set _moveCost = 0>>
+
+  <<if $Field.grid && _cmU.pos>>
+    <<chebyshev _cmU.pos.x _cmU.pos.y _cmTx _cmTy>>
+    <<if _dist === 1>>
+      <<cellAt _cmTx _cmTy>><<set _cmTgtCell = _cell>>
+      <<cellAt _cmU.pos.x _cmU.pos.y>><<set _cmFromCell = _cell>>
+      <<if _cmTgtCell && _cmTgtCell.occupiable>>
+        /* 检查是否有别的active单位占据目标格 */
+        <<set _cmOccupied = false>>
+        <<for _cm = 0; _cm < $Units.length; _cm++>>
+          <<if $Units[_cm].status === "active" && not $Units[_cm].isFormation && $Units[_cm].pos && $Units[_cm].pos.x === _cmTx && $Units[_cm].pos.y === _cmTy>>
+            <<set _cmOccupied = true>><<break>>
+          <</if>>
+        <</for>>
+        <<if not _cmOccupied>>
+          <<set _cmFly = _cmU.traits && _cmU.traits.indexOf("fly") !== -1>>
+          /* verylow判定 */
+          <<if _cmTgtCell.elevation === "verylow">>
+            <<if _cmFly>>
+              <<set _canMove = true>>
+              <<set _moveCost = 15>>   /* 10 + 飞行5 */
+            <</if>>
+          <<elseif _cmTgtCell.elevation === "high">>
+            /* 必须从mid/high出发 */
+            <<if _cmFromCell && (_cmFromCell.elevation === "mid" || _cmFromCell.elevation === "high")>>
+              <<set _canMove = true>>
+              <<set _moveCost = 15>>   /* 10 + high5 */
+            <<elseif _cmFly>>
+              <<set _canMove = true>>
+              <<set _moveCost = 20>>   /* 10 + high5 + 飞5 */
+            <</if>>
+          <<else>>
+            /* low / mid 普通可进 */
+            <<set _canMove = true>>
+            <<set _moveCost = 10>>
+            <<if _canMove>>
+              <<extraCost _cmU "moveCostAdd">>
+              <<set _moveCost += _extraCost>>
+            <</if>>
+          <</if>>
+        <</if>>
+      <</if>>
+    <</if>>
+  <</if>>
+<</widget>>
+
+
+/*
+  moveUnit：执行移动。扣SpeedLevel，更新pos，刷新站立buff。
+  _args[0]=单位 _args[1]=tx _args[2]=ty
+  调用前应已用canMoveTo确认可行（这里再算一次cost）。
+*/
+<<widget "moveUnit">>
+  <<set _muU = _args[0]>>
+  <<set _muTx = _args[1]>>
+  <<set _muTy = _args[2]>>
+  <<canMoveTo _muU _muTx _muTy>>
+  <<if _canMove>>
+    <<set _muU.RemainSpeedLevel -= _moveCost>>
+    <<set _muU.pos = { x:_muTx, y:_muTy }>>
+    <<refreshStandBuff _muU>>
+    <<set $ActionLog = _muU.name + "移动到了(" + _muTx + "," + _muTy + ")。">>
+  <</if>>
+<</widget>>
+
+
+/*
+  refreshStandBuff：根据单位当前所在格的buffOnStand，刷新站立buff。
+  先移除旧的站立buff(标记stand:true)，再按当前格加。
+  _args[0]=单位
+*/
+<<widget "refreshStandBuff">>
+  <<set _rsU = _args[0]>>
+  /* 移除旧站立buff */
+  <<set _rsKept = []>>
+  <<for _rs = 0; _rs < _rsU.buff.length; _rs++>>
+    <<if not _rsU.buff[_rs].fromStand>>
+      <<run _rsKept.push(_rsU.buff[_rs])>>
+    <</if>>
+  <</for>>
+  <<set _rsU.buff = _rsKept>>
+
+  /* 按当前格加 */
+  <<if $Field.grid && _rsU.pos>>
+    <<cellAt _rsU.pos.x _rsU.pos.y>>
+    <<if _cell && _cell.buffOnStand>>
+      <<applyBuff _rsU `{ buffId:_cell.buffOnStand, duration:9999 }`>>
+      <<set _rsLast = _rsU.buff[_rsU.buff.length - 1]>>
+      <<set _rsLast.fromStand = true>>
+    <</if>>
+  <</if>>
+<</widget>>
+
+/*
+  generateGrid：按tag生成地图，写入$Field.grid。
+  _args[0]=tag数组(如 ["plain"] / ["mountain"] / ["volcano"])
+  _args[1]=宽(缺省8) _args[2]=高(缺省8)
+*/
+<<widget "generateGrid">>
+  <<set _ggTags = _args[0] || []>>
+  <<set _ggW = _args[1] || 8>>
+  <<set _ggH = _args[2] || 8>>
+  <<set _ggCells = []>>
+
+  /* 山地/某些地形：随机确定高地边方向 */
+  <<set _ggHighSide = ["top","bottom","left","right"].random()>>
+  /* 山坡：随机斜坡方向 */
+  <<set _ggSlopeDir = ["lr","rl","tb","bt"].random()>>
+  /* 壶口：随机出口位置(边缘某格) */
+  <<set _ggGateSide = ["top","bottom","left","right"].random()>>
+
+  <<for _ggY = 0; _ggY < _ggH; _ggY++>>
+    <<for _ggX = 0; _ggX < _ggW; _ggX++>>
+      <<set _ggElev = "low">>
+      <<set _ggTerr = []>>
+      <<set _ggOcc = true>>
+      <<set _ggStand = null>>
+      <<set _ggEdge = Math.min(_ggX, _ggW - 1 - _ggX, _ggY, _ggH - 1 - _ggY)>>
+
+      /* ===== 山地：一边崖，向内递减 ===== */
+      <<if _ggTags.indexOf("mountain") !== -1>>
+        <<set _ggDist = _ggHighSide === "top" ? _ggY : (_ggHighSide === "bottom" ? _ggH-1-_ggY : (_ggHighSide === "left" ? _ggX : _ggW-1-_ggX))>>
+        <<set _ggNoise = Math.floor(Math.random() * 3) - 1>>
+        <<set _ggLvl = _ggDist + _ggNoise>>
+        <<if _ggLvl <= 0>><<set _ggElev = "verylow">>
+        <<elseif _ggLvl === 1>><<set _ggElev = "high">>
+        <<elseif _ggLvl === 2>><<set _ggElev = "mid">>
+        <<else>><<set _ggElev = "low">>
+        <</if>>
+      <</if>>
+
+      /* ===== 平原 ===== */
+      <<if _ggTags.indexOf("plain") !== -1>>
+        <<if Math.random() < 0.08>><<set _ggElev = "mid">>
+        <<elseif Math.random() < 0.04>><<set _ggElev = "high">>
+        <</if>>
+      <</if>>
+
+      /* ===== 洼地：似平原，植物砍半，多浅水 ===== */
+      <<if _ggTags.indexOf("lowland") !== -1>>
+        <<if Math.random() < 0.04>><<set _ggElev = "mid">><</if>>
+      <</if>>
+
+      /* ===== 河流：中央集中深水带，两侧浅水 ===== */
+      <<if _ggTags.indexOf("river") !== -1>>
+        <<set _ggMid = Math.floor(_ggW / 2)>>
+        <<if _ggX >= _ggMid - 1 && _ggX <= _ggMid>>
+          <<set _ggElev = "verylow">>
+          <<set _ggTerr.push("water")>>
+        <<elseif _ggX === _ggMid - 2 || _ggX === _ggMid + 1>>
+          <<set _ggElev = "low">>
+          <<set _ggTerr.push("water")>>
+        <</if>>
+      <</if>>
+
+      /* ===== 火山 ===== */
+      <<if _ggTags.indexOf("volcano") !== -1>>
+        <<if Math.random() < 0.15>>
+          <<set _ggTerr.push("lava")>>
+          <<set _ggStand = "lavaBurn">>
+        <</if>>
+        <<if Math.random() < 0.1>><<set _ggElev = "high">><</if>>
+      <</if>>
+
+      /* ===== 森林：高密度植物 ===== */
+      <<if _ggTags.indexOf("forest") !== -1>>
+        <<if Math.random() < 0.25>>
+          <<set _ggTerr.push("plant")>>
+          <<set _ggOcc = false>>
+        <</if>>
+      <</if>>
+
+      /* ===== 山坡：斜坡渐变，无极低 ===== */
+      <<if _ggTags.indexOf("slope") !== -1>>
+        <<if _ggSlopeDir === "lr">><<set _ggProg = _ggX / (_ggW - 1)>>
+        <<elseif _ggSlopeDir === "rl">><<set _ggProg = (_ggW-1-_ggX) / (_ggW - 1)>>
+        <<elseif _ggSlopeDir === "tb">><<set _ggProg = _ggY / (_ggH - 1)>>
+        <<else>><<set _ggProg = (_ggH-1-_ggY) / (_ggH - 1)>>
+        <</if>>
+        /* prog 0~1：高→中→低 */
+        <<set _ggNoise2 = (Math.random() - 0.5) * 0.2>>
+        <<set _ggP = _ggProg + _ggNoise2>>
+        <<if _ggP < 0.33>><<set _ggElev = "high">>
+        <<elseif _ggP < 0.66>><<set _ggElev = "mid">>
+        <<else>><<set _ggElev = "low">>
+        <</if>>
+      <</if>>
+
+      /* ===== 高台地(plateau)：似平原，某侧边缘为高地，无中地势 ===== */
+      <<if _ggTags.indexOf("plateau") !== -1>>
+        <<set _ggHdist = _ggHighSide === "top" ? _ggY : (_ggHighSide === "bottom" ? _ggH-1-_ggY : (_ggHighSide === "left" ? _ggX : _ggW-1-_ggX))>>
+        <<if _ggHdist === 0>><<set _ggElev = "high">>
+        <<else>><<set _ggElev = "low">>
+        <</if>>
+      <</if>>
+
+      /* ===== 壶口(basin)：四周外圈高地，留一个出口，内部平坦 ===== */
+      <<if _ggTags.indexOf("basin") !== -1>>
+        <<if _ggEdge === 0>>
+          /* 外圈默认高地 */
+          <<set _ggIsGate = false>>
+          /* 出口：选中边的中间格 */
+          <<if _ggGateSide === "top" && _ggY === 0 && _ggX === Math.floor(_ggW/2)>><<set _ggIsGate = true>><</if>>
+          <<if _ggGateSide === "bottom" && _ggY === _ggH-1 && _ggX === Math.floor(_ggW/2)>><<set _ggIsGate = true>><</if>>
+          <<if _ggGateSide === "left" && _ggX === 0 && _ggY === Math.floor(_ggH/2)>><<set _ggIsGate = true>><</if>>
+          <<if _ggGateSide === "right" && _ggX === _ggW-1 && _ggY === Math.floor(_ggH/2)>><<set _ggIsGate = true>><</if>>
+          <<if _ggIsGate>><<set _ggElev = "low">>
+          <<else>><<set _ggElev = "high">>
+          <</if>>
+        <<else>>
+          <<set _ggElev = "low">>
+        <</if>>
+      <</if>>
+
+      /* ===== 通用点缀：空地随机植物/浅水 ===== */
+      <<if _ggTerr.length === 0 && _ggElev !== "verylow" && _ggElev !== "high">>
+        /* 洼地植物砍半(0.05)、浅水加倍(0.10)；其余地形植物0.10浅水0.05 */
+        <<if _ggTags.indexOf("lowland") !== -1>>
+          <<if Math.random() < 0.05>><<set _ggTerr.push("plant")>><<set _ggOcc = false>>
+          <<elseif Math.random() < 0.10>><<set _ggTerr.push("water")>>
+          <</if>>
+        <<elseif _ggTags.indexOf("forest") === -1>>
+          <<if Math.random() < 0.10>><<set _ggTerr.push("plant")>><<set _ggOcc = false>>
+          <<elseif Math.random() < 0.05>><<set _ggTerr.push("water")>>
+          <</if>>
+        <</if>>
+      <</if>>
+
+      <<set _ggCells.push({
+          elevation: _ggElev,
+          terrain: _ggTerr,
+          obscured: false,
+          occupiable: _ggOcc,
+          buffOnStand: _ggStand
+      })>>
+    <</for>>
+  <</for>>
+
+  <<set $Field.grid = { width:_ggW, height:_ggH, cells:_ggCells }>>
+<</widget>>
+
+
+
+/*
+  placeUnitsOnGrid：把所有active单位摆到地图上(简单分两侧)。
+  ally放左侧列，enemy放右侧列，找可站格。
+  战斗开始、生成grid后调用。
+*/
+<<widget "placeUnitsOnGrid">>
+  <<if $Field.grid>>
+    <<set _puW = $Field.grid.width>>
+    <<set _puH = $Field.grid.height>>
+
+    /* 收集左半区、右半区的合法可站格 */
+    <<set _puLeftCells = []>>
+    <<set _puRightCells = []>>
+    <<set _puMidX = Math.floor(_puW / 2)>>
+    /* 按列优先(从边缘往中间)收集，让单位贴边站 */
+    <<for _puX = 0; _puX < _puW; _puX++>>
+      <<for _puY = 0; _puY < _puH; _puY++>>
+        <<cellAt _puX _puY>>
+        <<if _cell && _cell.occupiable && _cell.elevation !== "verylow">>
+          <<if _puX < _puMidX>>
+            <<run _puLeftCells.push({ x:_puX, y:_puY })>>
+          <<elseif _puX >= _puW - _puMidX>>
+            <<run _puRightCells.push({ x:_puX, y:_puY })>>
+          <</if>>
+        <</if>>
+      <</for>>
+    <</for>>
+
+    /* 左区按x升序(贴左边)，右区按x降序(贴右边) */
+    <<set _puLeftCells = _puLeftCells.sort(function(a,b){ return a.x - b.x; })>>
+    <<set _puRightCells = _puRightCells.sort(function(a,b){ return b.x - a.x; })>>
+
+    <<set _puLeftI = 0>>
+    <<set _puRightI = 0>>
+    <<for _pu = 0; _pu < $Units.length; _pu++>>
+      <<set _puU = $Units[_pu]>>
+      <<if not _puU.isFormation && _puU.status === "active">>
+        <<if _puU.side === "ally">>
+          <<if _puLeftI < _puLeftCells.length>>
+            <<set _puU.pos = { x:_puLeftCells[_puLeftI].x, y:_puLeftCells[_puLeftI].y }>>
+            <<set _puLeftI += 1>>
+          <<else>>
+            /* 左区满，用placeNearCell兜底找空格 */
+            <<placeNearCell _puU 0 0>>
+          <</if>>
+        <<else>>
+          <<if _puRightI < _puRightCells.length>>
+            <<set _puU.pos = { x:_puRightCells[_puRightI].x, y:_puRightCells[_puRightI].y }>>
+            <<set _puRightI += 1>>
+          <<else>>
+            <<set _puBx = _puW - 1>>
+            <<placeNearCell _puU _puBx 0>>
+          <</if>>
+        <</if>>
+        <<refreshStandBuff _puU>>
+      <</if>>
+    <</for>>
+  <</if>>
+<</widget>>
+
+
+<<widget "showGrid">>
+  <<if not $Field.grid>>
+    （无地图）<br>
+  <<else>>
+    <<set _sgW = $Field.grid.width>>
+    <<set _sgH = $Field.grid.height>>
+    <table style="border-collapse:collapse;font-size:12px">
+    <<for _sgY = 0; _sgY < _sgH; _sgY++>>
+      <tr>
+      <<for _sgX = 0; _sgX < _sgW; _sgX++>>
+        <<cellAt _sgX _sgY>>
+        <<set _sgCell = _cell>>
+
+        /* 找该格单位 */
+        <<set _sgUnit = null>>
+        <<for _sgI = 0; _sgI < $Units.length; _sgI++>>
+          <<if $Units[_sgI].status === "active" && not $Units[_sgI].isFormation && $Units[_sgI].pos && $Units[_sgI].pos.x === _sgX && $Units[_sgI].pos.y === _sgY>>
+            <<set _sgUnit = $Units[_sgI]>><<break>>
+          <</if>>
+        <</for>>
+
+        /* 背景色按地势 */
+        <<set _sgBg = "rgb(170, 255, 182)">>
+        <<if _sgCell.elevation === "mid">><<set _sgBg = "rgb(224, 187, 74)">>
+        <<elseif _sgCell.elevation === "high">><<set _sgBg = "rgb(126, 95, 4)">>
+        <<elseif _sgCell.elevation === "verylow">><<set _sgBg = "#222">>   /* 崖=深灰黑 */
+        <</if>>
+        <<if _sgCell.terrain.indexOf("lava") !== -1>><<set _sgBg = "#a33">>
+        <<elseif _sgCell.terrain.indexOf("plant") !== -1>><<set _sgBg = "rgb(17, 96, 64)">>
+        <<elseif _sgCell.terrain.indexOf("water") !== -1>>
+          <<if _sgCell.elevation === "verylow">><<set _sgBg = "#249">>   /* 深水 */
+          <<else>><<set _sgBg = "#6af">>   /* 浅水 */
+          <</if>>
+        <</if>>
+
+
+        /* 格内字符 */
+        <<set _sgTxt = "">>
+        <<set _sgColor = "#fff">>
+        <<if _sgUnit>>
+          /* 敌方在烟雾格且玩家不能看穿 → 隐藏 */
+          <<set _sgHide = false>>
+          <<if _sgUnit.side === "enemy">>
+            <<allyCanSee _sgUnit "ally">>
+            <<set _sgHide = not _canSee>>
+          <</if>>
+          <<if not _sgHide>>
+            <<set _sgTxt = _sgUnit.name.substr(0,1)>>
+            <<if _sgUnit.side === "ally">><<set _sgColor = "#4af">><<else>><<set _sgColor = "#f55">><</if>>
+          <</if>>
+        <</if>>
+
+
+        /* 烟雾边框 */
+        <<set _sgBorder = "1px solid #222">>
+        <<if _sgCell.obscured>><<set _sgBorder = "2px solid #ccc">><</if>>
+
+        <td @style="'width:22px;height:22px;text-align:center;font-weight:bold;color:'+_sgColor+';border:'+_sgBorder+';background:'+_sgBg"><<= _sgTxt>></td>
+      <</for>>
+      </tr>
+    <</for>>
+    </table>
+    <div style="font-size:11px">浅绿=平地 亮褐=中地势 深褐=高地 黑=极低/崖底 深绿=植物占据 蓝=水</div>
+  <</if>>
+<</widget>>
+
+
+/*
+  inWeaponRange：判断目标位置是否在单位武器/法术射程内，放 _inRange。
+  同时算弓近距减伤因子 _rangeFactor（1=正常，0.3=近距减伤）。
+  _args[0]=攻击者 _args[1]=tx _args[2]=ty _args[3]=range(数值，999=不限) _args[4]=minRange(缺省0)
+*/
+<<widget "inWeaponRange">>
+  <<set _iwU = _args[0]>>
+  <<set _iwTx = _args[1]>>
+  <<set _iwTy = _args[2]>>
+  <<set _iwRange = _args[3]>>
+  <<set _iwMin = _args[4] || 0>>
+  <<set _inRange = false>>
+  <<set _rangeFactor = 1>>
+
+  <<if _iwU.pos>>
+    <<chebyshev _iwU.pos.x _iwU.pos.y _iwTx _iwTy>>
+    <<if _dist <= _iwRange && _dist >= 1>>
+      <<set _inRange = true>>
+      <<if _iwMin > 0 && _dist < _iwMin>>
+        <<set _rangeFactor = 0.3>>
+      <</if>>
+    <</if>>
+  <<else>>
+    /* 无地图(pos为null)：视为永远在射程，因子1 */
+    <<set _inRange = true>>
+  <</if>>
+<</widget>>
+
+
+/*
+  aoeRadius：算AOE半径，放 _aoeR。radius = 2 + floor(log2(castingLevel))。
+  _args[0]=castingLevel
+*/
+<<widget "aoeRadius">>
+  <<set _arLv = _args[0]>>
+  <<if _arLv < 1>><<set _arLv = 1>><</if>>
+  <<set _aoeR = 2 + Math.floor(Math.log(_arLv) / Math.log(2))>>
+<</widget>>
+
+
+/*
+  unitsInArea：取以(cx,cy)为中心、radius切比雪夫范围内、指定阵营的active单位，放 _areaUnits。
+  _args[0]=中心x _args[1]=中心y _args[2]=radius _args[3]=side("enemy"/"ally"相对_args[4]) _args[4]=施法者
+*/
+<<widget "unitsInArea">>
+  <<set _uiaCx = _args[0]>>
+  <<set _uiaCy = _args[1]>>
+  <<set _uiaR = _args[2]>>
+  <<set _uiaSide = _args[3]>>
+  <<set _uiaCaster = _args[4]>>
+  <<set _areaUnits = []>>
+
+  <<for _uia = 0; _uia < $Units.length; _uia++>>
+    <<set _uiaU = $Units[_uia]>>
+    <<if _uiaU.status === "active" && not _uiaU.isFormation && _uiaU.pos>>
+      <<chebyshev _uiaCx _uiaCy _uiaU.pos.x _uiaU.pos.y>>
+      <<if _dist <= _uiaR>>
+        <<set _uiaMatch = false>>
+        <<if _uiaSide === "enemy" && _uiaU.side !== _uiaCaster.side>><<set _uiaMatch = true>>
+        <<elseif _uiaSide === "ally" && _uiaU.side === _uiaCaster.side>><<set _uiaMatch = true>>
+        <</if>>
+        <<if _uiaMatch>>
+          <<run _areaUnits.push(_uiaU)>>
+        <</if>>
+      <</if>>
+    <</if>>
+  <</for>>
+<</widget>>
+
+
+/*
+  unitAtCell：取(x,y)格上的active非法阵单位，放 _cellUnit（无则null）。
+  _args[0]=x _args[1]=y
+*/
+<<widget "unitAtCell">>
+  <<set _uacX = _args[0]>>
+  <<set _uacY = _args[1]>>
+  <<set _cellUnit = null>>
+  <<for _uac = 0; _uac < $Units.length; _uac++>>
+    <<if $Units[_uac].status === "active" && not $Units[_uac].isFormation && $Units[_uac].pos && $Units[_uac].pos.x === _uacX && $Units[_uac].pos.y === _uacY>>
+      <<set _cellUnit = $Units[_uac]>><<break>>
+    <</if>>
+  <</for>>
+<</widget>>
+
+
+/*
+  gridTargetUI：渲染可点击的目标选择地图。
+  _args[0]=行动者 _args[1]=range _args[2]=minRange _args[3]=actionType("attack"/"spell") _args[4]=spellKey(spell时)
+  射程内格子为链接，点击设$PendingAction并执行performAction后回Player Turn。
+*/
+<<widget "gridTargetUI">>
+  <<set _gtU = _args[0]>>
+  <<set _gtRange = _args[1]>>
+  <<set _gtMin = _args[2]>>
+  <<set _gtType = _args[3]>>
+  <<set _gtSpell = _args[4]>>
+
+  <<if not $Field.grid>>
+    （无地图，无法选格）<br>
+  <<else>>
+    <<set _gtW = $Field.grid.width>>
+    <<set _gtH = $Field.grid.height>>
+    <table style="border-collapse:collapse;font-size:12px">
+    <<for _gtY = 0; _gtY < _gtH; _gtY++>>
+      <tr>
+      <<for _gtX = 0; _gtX < _gtW; _gtX++>>
+        <<cellAt _gtX _gtY>><<set _gtCell = _cell>>
+
+        /* 该格单位(烟雾隐藏敌方) */
+        <<unitAtCell _gtX _gtY>><<set _gtUnit = _cellUnit>>
+        <<set _gtTxt = "·">>
+        <<set _gtColor = "#888">>
+        <<if _gtUnit>>
+          <<set _gtHide = false>>
+          <<if _gtUnit.side !== _gtU.side>>
+            <<allyCanSee _gtUnit _gtU.side>>
+            <<set _gtHide = not _canSee>>
+          <</if>>
+          <<if not _gtHide>>
+            <<set _gtTxt = _gtUnit.name.substr(0,1)>>
+            <<if _gtUnit.side === _gtU.side>><<set _gtColor = "#4af">><<else>><<set _gtColor = "#f55">><</if>>
+          <</if>>
+        <</if>>
+
+        /* 背景按地势 */
+        <<set _gtBg = "rgb(170, 255, 182)">>
+        <<if _gtCell.elevation === "mid">><<set _gtBg = "#6a5">>
+        <<elseif _gtCell.elevation === "high">><<set _gtBg = "rgb(224, 187, 74)">>
+        <<elseif _gtCell.elevation === "verylow">><<set _gtBg = "#222">>
+        <</if>>
+        <<if _gtCell.terrain.indexOf("lava") !== -1>><<set _gtBg = "#a33">>
+        <<elseif _gtCell.terrain.indexOf("water") !== -1>>
+          <<if _gtCell.elevation === "verylow">><<set _gtBg = "#249">>
+          <<else>><<set _gtBg = "#6af">>
+          <</if>>
+        <<elseif _gtCell.terrain.indexOf("plant") !== -1>><<set _gtBg = "rgb(17, 96, 64)">>
+        <</if>>
+        <<set _gtBorder = "1px solid #222">>
+        <<if _gtCell.obscured>><<set _gtBorder = "2px solid #ccc">><</if>>
+
+        /* 是否在射程内可点 */
+        <<if _gtType === "move">>
+          <<canMoveTo _gtU _gtX _gtY>>
+          <<set _gtCanClick = _canMove>>
+        <<else>>
+          <<inWeaponRange _gtU _gtX _gtY _gtRange _gtMin>>
+          <<set _gtCanClick = _inRange>>
+        <</if>>
+        <<if _gtCanClick>>
+          /* 射程内：高亮+可点 */
+          <<set _gtBorder = "2px solid #ff0">>
+          <<set _gtCX = _gtX>><<set _gtCY = _gtY>>
+          <<set _gtSP = _gtSpell>><<set _gtTY = _gtType>>
+          <<capture _gtCX, _gtCY, _gtSP, _gtTY, _gtBg, _gtColor, _gtBorder, _gtTxt>>
+            <td @style="'width:24px;height:24px;text-align:center;font-weight:bold;color:'+_gtColor+';border:'+_gtBorder+';background:'+_gtBg+';cursor:pointer'">
+              <<link _gtTxt>>
+                <<if _gtTY === "attack">>
+                  <<performAction `{ actionType:"attack", sourceId:$ActiveActorId, targetCell:{ x:_gtCX, y:_gtCY }, heavyLevel:$AttackHeavy }`>>
+                  <<set $AttackHeavy = 0>>
+                <<elseif _gtTY === "spell">>
+                  <<performAction `{ actionType:"spell", sourceId:$ActiveActorId, ref:_gtSP, castingLevel:$CastLevelChoice, targetCell:{ x:_gtCX, y:_gtCY } }`>>
+                  <<set $CastLevelChoice = 1>>
+                <<elseif _gtTY === "item">>
+                  <<performAction `{ actionType:"item", sourceId:$ActiveActorId, ref:_gtSP, targetCell:{ x:_gtCX, y:_gtCY } }`>>
+                <<elseif _gtTY === "formation">>
+                  <<performAction `{ actionType:"formation", sourceId:$ActiveActorId, ref:_gtSP, castingLevel:$CastLevelChoice, targetCell:{ x:_gtCX, y:_gtCY } }`>>
+                  <<set $CastLevelChoice = 1>>
+                <<elseif _gtTY === "skill">>
+                  <<performAction `{ actionType:"physical", sourceId:$ActiveActorId, ref:_gtSP, targetCell:{ x:_gtCX, y:_gtCY } }`>>
+                <<elseif _gtTY === "move">>
+                  <<findUnit $ActiveActorId>>
+                  <<moveUnit _foundUnit _gtCX _gtCY>>
+                <</if>>
+                <<goto "Battle Player Turn">>
+              <</link>>
+            </td>
+          <</capture>>
+        <<else>>
+          <td @style="'width:24px;height:24px;text-align:center;font-weight:bold;color:'+_gtColor+';border:'+_gtBorder+';background:'+_gtBg"><<= _gtTxt>></td>
+        <</if>>
+      <</for>>
+      </tr>
+    <</for>>
+    </table>
+    黄边=可选目标格<br>
+  <</if>>
+<</widget>>
+
+
+/*
+  stepToward：算从单位当前位置朝目标(tx,ty)走一步的最佳相邻格，放 _stepX,_stepY,_canStep。
+  选能缩短切比雪夫距离、可移动、消耗付得起的相邻格。
+  _args[0]=单位 _args[1]=tx _args[2]=ty
+*/
+<<widget "stepToward">>
+  <<set _stU = _args[0]>>
+  <<set _stTx = _args[1]>>
+  <<set _stTy = _args[2]>>
+  <<set _canStep = false>>
+  <<set _stX = 0>><<set _stY = 0>>
+  <<set _stBestDist = 9999>>
+
+  <<if _stU.pos>>
+    <<for _stDy = -1; _stDy <= 1; _stDy++>>
+      <<for _stDx = -1; _stDx <= 1; _stDx++>>
+        <<if not (_stDx === 0 && _stDy === 0)>>
+          <<set _stNx = _stU.pos.x + _stDx>>
+          <<set _stNy = _stU.pos.y + _stDy>>
+          <<canMoveTo _stU _stNx _stNy>>
+          <<if _canMove && _stU.RemainSpeedLevel >= _moveCost>>
+            <<chebyshev _stNx _stNy _stTx _stTy>>
+            <<if _dist < _stBestDist>>
+              <<set _stBestDist = _dist>>
+              <<set _stX = _stNx>><<set _stY = _stNy>>
+              <<set _canStep = true>>
+            <</if>>
+          <</if>>
+        <</if>>
+      <</for>>
+    <</for>>
+  <</if>>
+<</widget>>
+
+
+/*
+  findNearestSmokeCell：找离单位最近的烟雾格(obscured)，放 _smokeX,_smokeY,_hasSmoke。
+  _args[0]=单位
+*/
+<<widget "findNearestSmokeCell">>
+  <<set _fsU = _args[0]>>
+  <<set _hasSmoke = false>>
+  <<set _smokeX = 0>><<set _smokeY = 0>>
+  <<set _fsBest = 9999>>
+  <<if $Field.grid && _fsU.pos>>
+    <<for _fsY = 0; _fsY < $Field.grid.height; _fsY++>>
+      <<for _fsX = 0; _fsX < $Field.grid.width; _fsX++>>
+        <<cellAt _fsX _fsY>>
+        <<if _cell && _cell.obscured && _cell.occupiable>>
+          /* 该格无其他单位 */
+          <<unitAtCell _fsX _fsY>>
+          <<if _cellUnit === null || _cellUnit.id === _fsU.id>>
+            <<chebyshev _fsU.pos.x _fsU.pos.y _fsX _fsY>>
+            <<if _dist < _fsBest>>
+              <<set _fsBest = _dist>>
+              <<set _smokeX = _fsX>><<set _smokeY = _fsY>>
+              <<set _hasSmoke = true>>
+            <</if>>
+          <</if>>
+        <</if>>
+      <</for>>
+    <</for>>
+  <</if>>
+<</widget>>
+
+
+/*
+  aiPickTarget：AI选一个攻击目标敌人(优先非烟雾、血少)，放 _aiTgt(单位或null)。
+  _args[0]=AI单位
+*/
+<<widget "aiPickTarget">>
+  <<set _apU = _args[0]>>
+  <<set _aiTgt = null>>
+  <<set _apEnemies = $Units.filter(function(u){ return u.side !== _apU.side && u.status === "active" && !u.isFormation; })>>
+
+  /* 分两组：非烟雾、烟雾 */
+  <<set _apClear = []>>
+  <<set _apSmoke = []>>
+  <<for _ap = 0; _ap < _apEnemies.length; _ap++>>
+    <<set _apE = _apEnemies[_ap]>>
+    <<set _apObsc = false>>
+    <<if $Field.grid && _apE.pos>>
+      <<cellAt _apE.pos.x _apE.pos.y>>
+      <<if _cell && _cell.obscured>><<set _apObsc = true>><</if>>
+    <</if>>
+    <<if _apObsc>><<run _apSmoke.push(_apE)>><<else>><<run _apClear.push(_apE)>><</if>>
+  <</for>>
+
+  /* 优先非烟雾里血最少的 */
+  <<set _apPool = _apClear.length > 0 ? _apClear : _apSmoke>>
+  <<for _ap = 0; _ap < _apPool.length; _ap++>>
+    <<if _aiTgt === null || _apPool[_ap].RemainHP < _aiTgt.RemainHP>>
+      <<set _aiTgt = _apPool[_ap]>>
+    <</if>>
+  <</for>>
+<</widget>>
+
+
+/*
+  allyCanSee：判断某敌方单位是否被我方看见，放 _canSee。
+  规则：敌人不在烟雾格→可见；在烟雾格→若我方有任一存活非烟雾单位则可见(共享视野)；
+        或观察者/任一我方单位有seeThrough特质则可见。
+  _args[0]=敌方单位 _args[1]=我方side("ally"/"enemy"，即观察方阵营)
+*/
+<<widget "allyCanSee">>
+  <<set _acsTarget = _args[0]>>
+  <<set _acsSide = _args[1]>>
+  <<set _canSee = true>>
+
+  <<if $Field.grid && _acsTarget.pos>>
+    <<cellAt _acsTarget.pos.x _acsTarget.pos.y>>
+    <<if _cell && _cell.obscured>>
+      /* 敌人在烟雾里：默认不可见，除非满足条件 */
+      <<set _canSee = false>>
+      <<for _acs = 0; _acs < $Units.length; _acs++>>
+        <<set _acsU = $Units[_acs]>>
+        <<if _acsU.side === _acsSide && _acsU.status === "active" && not _acsU.isFormation>>
+          /* 有seeThrough特质 → 可见 */
+          <<if _acsU.special && _acsU.special.indexOf("seeThrough") !== -1>>
+            <<set _canSee = true>><<break>>
+          <</if>>
+          /* 该我方单位不在烟雾 → 共享视野可见 */
+          <<if _acsU.pos>>
+            <<cellAt _acsU.pos.x _acsU.pos.y>>
+            <<if not (_cell && _cell.obscured)>>
+              <<set _canSee = true>><<break>>
+            <</if>>
+          <</if>>
+        <</if>>
+      <</for>>
+    <</if>>
+  <</if>>
+<</widget>>
+
+/*
+  tryFlee：尝试逃跑。成功率基于我方vs敌方平均initiative。
+  成功→清空$Units跳$BattleFlee；失败→设_fleeFail=true(消耗回合，敌人继续)。
+  _args[0]=发起逃跑的单位
+*/
+<<widget "tryFlee">>
+  <<set _tfU = _args[0]>>
+  /* 我方与敌方平均initiative */
+  <<set _tfAllySum = 0>><<set _tfAllyN = 0>>
+  <<set _tfEnemySum = 0>><<set _tfEnemyN = 0>>
+  <<for _tf = 0; _tf < $Units.length; _tf++>>
+    <<set _tfX = $Units[_tf]>>
+    <<if _tfX.status === "active" && not _tfX.isFormation>>
+      <<finalInitiative _tfX>>
+      <<if _tfX.side === _tfU.side>>
+        <<set _tfAllySum += _fi>><<set _tfAllyN += 1>>
+      <<else>>
+        <<set _tfEnemySum += _fi>><<set _tfEnemyN += 1>>
+      <</if>>
+    <</if>>
+  <</for>>
+  <<set _tfAllyAvg = _tfAllyN > 0 ? _tfAllySum / _tfAllyN : 1>>
+  <<set _tfEnemyAvg = _tfEnemyN > 0 ? _tfEnemySum / _tfEnemyN : 1>>
+
+  /* 成功率：基础60% + 速度优势修正，区间[10%,95%] */
+  <<set _tfChance = 0.6 + (_tfAllyAvg - _tfEnemyAvg) / (_tfEnemyAvg + 1) * 0.3>>
+  <<if _tfChance > 0.95>><<set _tfChance = 0.95>><</if>>
+  <<if _tfChance < 0.1>><<set _tfChance = 0.1>><</if>>
+
+  <<if Math.random() < _tfChance>>
+    <<set _fleeFail = false>>
+    <<set $BattleExitReason = "flee">>
+    <<set $Units = []>>
+    <<set $Field = { buff:[], triggers:[], tick:0, round:1, grid:null }>>
+    <<goto $BattleFlee>>
+  <<else>>
+    <<set _fleeFail = true>>
+    <<set $ActionLog = _tfU.name + "试图逃跑，但没能成功！">>
+  <</if>>
+<</widget>>
+
+/*
+  extraCost：算单位某消耗修正(buff累加)，基础0。放 _extraCost。
+  _args[0]=单位 _args[1]=stat名("moveCostAdd"/"actCostAdd")
+*/
+<<widget "extraCost">>
+  <<set _ecU = _args[0]>>
+  <<set _ecName = _args[1]>>
+  <<set _ecVal = 0>>
+  <<for _ecB = 0; _ecB < _ecU.buff.length; _ecB++>>
+    <<set _ecDef = $BuffLibrary[_ecU.buff[_ecB].id]>>
+    <<if _ecDef && _ecDef.apply.indexOf("snapshot") !== -1>>
+      <<for _ecE = 0; _ecE < _ecDef.effects.length; _ecE++>>
+        <<set _ecEff = _ecDef.effects[_ecE]>>
+        <<if _ecEff.stat === _ecName>>
+          <<if _ecEff.scaling === "stack">>
+            <<set _ecVal += _ecEff.value * _ecU.buff[_ecB].stack>>
+          <<else>>
+            <<set _ecVal += _ecEff.value>>
+          <</if>>
+        <</if>>
+      <</for>>
+    <</if>>
+  <</for>>
+  <<set _extraCost = _ecVal>>
+<</widget>>
+
+/*
+  placeNearCell：把单位放到(cx,cy)附近最近的可站空格。
+  _args[0]=单位 _args[1]=cx _args[2]=cy
+*/
+<<widget "placeNearCell">>
+  <<set _pnU = _args[0]>>
+  <<set _pnCx = _args[1]>>
+  <<set _pnCy = _args[2]>>
+  <<set _pnPlaced = false>>
+  <<if $Field.grid>>
+    /* 螺旋式从近到远找空格，简单用半径递增 */
+    <<for _pnR = 0; _pnR <= Math.max($Field.grid.width, $Field.grid.height) && not _pnPlaced; _pnR++>>
+      <<for _pnY = _pnCy - _pnR; _pnY <= _pnCy + _pnR && not _pnPlaced; _pnY++>>
+        <<for _pnX = _pnCx - _pnR; _pnX <= _pnCx + _pnR && not _pnPlaced; _pnX++>>
+          <<cellAt _pnX _pnY>>
+          <<if _cell && _cell.occupiable && _cell.elevation !== "verylow">>
+            <<unitAtCell _pnX _pnY>>
+            <<if _cellUnit === null>>
+              <<set _pnU.pos = { x:_pnX, y:_pnY }>>
+              <<refreshStandBuff _pnU>>
+              <<set _pnPlaced = true>>
+            <</if>>
+          <</if>>
+        <</for>>
+      <</for>>
+    <</for>>
+  <</if>>
+<</widget>>
+
+
+/*
+  teleportToRandomCell：把单位传送到随机可站空格。_args[0]=单位
+*/
+<<widget "teleportToRandomCell">>
+  <<set _trU = _args[0]>>
+  <<if $Field.grid>>
+    <<set _trCands = []>>
+    <<for _trY = 0; _trY < $Field.grid.height; _trY++>>
+      <<for _trX = 0; _trX < $Field.grid.width; _trX++>>
+        <<cellAt _trX _trY>>
+        <<if _cell && _cell.occupiable && _cell.elevation !== "verylow">>
+          <<unitAtCell _trX _trY>>
+          <<if _cellUnit === null>>
+            <<run _trCands.push({ x:_trX, y:_trY })>>
+          <</if>>
+        <</if>>
+      <</for>>
+    <</for>>
+    <<if _trCands.length > 0>>
+      <<set _trPick = _trCands.random()>>
+      <<set _trU.pos = { x:_trPick.x, y:_trPick.y }>>
+      <<refreshStandBuff _trU>>
+      <<set $ActionLog = _trU.name + "被传送了！">>
+    <</if>>
+  <</if>>
+<</widget>>
+
+/*
+  scheduleReinforcement：n个tick后召唤一个单位。
+  _args[0]=ticks(全局tick数) _args[1]=spawnUnit参数对象
+*/
+<<widget "scheduleReinforcement">>
+  <<run $Field.triggers.push({
+      id: "reinforce_" + State.variables.UnitIdCounter,
+      remaining: _args[0],
+      action: "spawn",
+      payload: _args[1]
+  })>>
+<</widget>>
+
+/*
+  teleportEscape：传送带队离场。整队撤离，标记teleport。
+  跳转$BattleFlee(复用逃跑跳转)，reason=teleport供剧情区分。
+*/
+<<widget "teleportEscape">>
+  <<set $BattleExitReason = "teleport">>
+  <<set $ActionLog = "一道传送光芒笼罩了队伍……">>
+  <<set $Units = []>>
+  <<goto $BattleFlee>>
+<</widget>>
+
+
+/*
+  doSkill：执行剑技。_args[0]=施法者 _args[1]=skillId _args[2]=action(含targetCell/等)
+*/
+<<widget "doSkill">>
+  <<set _dsU = _args[0]>>
+  <<set _dsId = _args[1]>>
+  <<set _dsAct = _args[2]>>
+  <<set _dsSk = $SkillLibrary[_dsId]>>
+
+  /* 扣消耗 */
+  <<for _ds = 0; _ds < _dsSk.cost.length; _ds++>>
+    <<set _dsC = _dsSk.cost[_ds]>>
+    <<set _dsU[_dsC.res] -= _dsC.value>>
+  <</for>>
+
+  <<switch _dsSk.targetMode>>
+
+    /* ---- self：对自己加buff(格挡) ---- */
+    <<case "self">>
+      <<if _dsSk.applyBuffs>>
+        <<for _ds = 0; _ds < _dsSk.applyBuffs.length; _ds++>>
+          <<set _dsB = _dsSk.applyBuffs[_ds]>>
+          <<applyBuff _dsU `{ buffId:_dsB.buffId, duration:_dsB.duration, stackPerLevel:1, castingLevel:1 }`>>
+        <</for>>
+      <</if>>
+      <<set $ActionLog = _dsU.name + "摆出了" + _dsSk.name + "的架势。">>
+
+    /* ---- cell：选格攻击(单体/区域，连击) ---- */
+    <<case "cell">>
+      <<set _dsTx = _dsAct.targetCell.x>>
+      <<set _dsTy = _dsAct.targetCell.y>>
+      <<buildSkillOnHit _dsU _dsSk>>   /* 构造onHit，放_skillOnHit */
+      <<if _dsSk.aoeRadius !== undefined>>
+        /* 区域 */
+        <<unitsInArea _dsTx _dsTy _dsSk.aoeRadius "enemy" _dsU>>
+        <<set _dsTc = _areaUnits.length>>
+        <<for _dsH = 0; _dsH < (_dsSk.hits || 1); _dsH++>>
+          <<for _dsI = 0; _dsI < _areaUnits.length; _dsI++>>
+            <<runOnHit _areaUnits[_dsI] _skillOnHit _dsU 1 _dsTc>>
+          <</for>>
+        <</for>>
+        <<set $ActionLog = _dsU.name + "使出" + _dsSk.name + "，波及" + _dsTc + "个目标。">>
+      <<else>>
+        /* 单体，连击hits次 */
+        <<unitAtCell _dsTx _dsTy>>
+        <<if _cellUnit && _cellUnit.side !== _dsU.side>>
+          <<for _dsH = 0; _dsH < (_dsSk.hits || 1); _dsH++>>
+            <<runOnHit _cellUnit _skillOnHit _dsU 1 1>>
+          <</for>>
+          <<set $ActionLog = _dsU.name + "对" + _cellUnit.name + "使出" + _dsSk.name + (_dsSk.hits > 1 ? "（" + _dsSk.hits + "连击）" : "") + "。">>
+        <<else>>
+          <<set $ActionLog = _dsU.name + "的" + _dsSk.name + "落空了。">>
+        <</if>>
+      <</if>>
+
+    /* ---- thrust：直线冲撞 ---- */
+    <<case "thrust">>
+      <<doThrust _dsU _dsSk _dsAct.targetCell>>
+
+    /* ---- climb：无视地势移动一格 ---- */
+    <<case "climb">>
+      <<set _dsTx = _dsAct.targetCell.x>>
+      <<set _dsTy = _dsAct.targetCell.y>>
+      <<cellAt _dsTx _dsTy>><<set _dsCell = _cell>>
+      <<unitAtCell _dsTx _dsTy>>
+      <<if _dsCell && _dsCell.occupiable && _cellUnit === null>>
+        <<set _dsU.pos = { x:_dsTx, y:_dsTy }>>
+        <<refreshStandBuff _dsU>>
+        <<set $ActionLog = _dsU.name + "攀爬到了(" + _dsTx + "," + _dsTy + ")。">>
+      <<else>>
+        <<set $ActionLog = _dsU.name + "无法攀爬到那里。">>
+      <</if>>
+
+  <</switch>>
+<</widget>>
+
+
+/*
+  buildSkillOnHit：构造剑技的onHit(基于武器伤害×weaponMult，含附魔)，放 _skillOnHit。
+  _args[0]=施法者 _args[1]=剑技数据
+*/
+<<widget "buildSkillOnHit">>
+  <<set _bsU = _args[0]>>
+  <<set _bsSk = _args[1]>>
+  <<set _bsW = _bsU.weapon>>
+  <<set _skillOnHit = []>>
+  <<if _bsW>>
+    <<set _bsVal = _bsW.baseValue>>
+    <<if _bsW.scaling>><<set _bsVal += _bsU[_bsW.scaling]>><</if>>
+    <<set _bsVal = Math.round(_bsVal * (_bsSk.weaponMult !== undefined ? _bsSk.weaponMult : 1))>>
+    <<set _bsTags = [(_bsW.damageType || "physical")]>>
+    <<if _bsW.element && _bsW.element !== "none">><<run _bsTags.push(_bsW.element)>><</if>>
+    <<run _skillOnHit.push({ kind:"damage", value:-_bsVal, damageType:_bsW.damageType||"physical", element:_bsW.element||"none", scaling:null, tags:_bsTags })>>
+    /* 附魔 */
+    <<if _bsW.enchant>>
+      <<for _bs = 0; _bs < _bsW.enchant.length; _bs++>>
+        <<set _bsEn = Math.round(_bsW.enchant[_bs].value * (_bsSk.weaponMult !== undefined ? _bsSk.weaponMult : 1))>>
+        <<run _skillOnHit.push({ kind:"damage", value:-_bsEn, damageType:"magical", element:_bsW.enchant[_bs].element, scaling:null, tags:[_bsW.enchant[_bs].element] })>>
+      <</for>>
+    <</if>>
+  <</if>>
+<</widget>>
+
+
+/*
+  doThrust：直线冲撞。从施法者朝targetCell方向走，撞到第一个敌人停在其前并伤害；
+  无敌人则走到最远maxDistance或边界。_args[0]=施法者 _args[1]=剑技 _args[2]=targetCell
+*/
+<<widget "doThrust">>
+  <<set _dtU = _args[0]>>
+  <<set _dtSk = _args[1]>>
+  <<set _dtCell = _args[2]>>
+  <<if _dtU.pos>>
+    /* 方向(单位化为-1/0/1) */
+    <<set _dtDx = _dtCell.x - _dtU.pos.x>>
+    <<set _dtDy = _dtCell.y - _dtU.pos.y>>
+    <<set _dtSx = _dtDx === 0 ? 0 : (_dtDx > 0 ? 1 : -1)>>
+    <<set _dtSy = _dtDy === 0 ? 0 : (_dtDy > 0 ? 1 : -1)>>
+
+    <<if not (_dtSx === 0 && _dtSy === 0)>>
+      <<set _dtCx = _dtU.pos.x>>
+      <<set _dtCy = _dtU.pos.y>>
+      <<set _dtHitUnit = null>>
+      <<set _dtFinalX = _dtU.pos.x>>
+      <<set _dtFinalY = _dtU.pos.y>>
+      <<set _dtMax = _dtSk.maxDistance || 5>>
+
+      <<for _dt = 1; _dt <= _dtMax; _dt++>>
+        <<set _dtNx = _dtU.pos.x + _dtSx * _dt>>
+        <<set _dtNy = _dtU.pos.y + _dtSy * _dt>>
+        <<cellAt _dtNx _dtNy>>
+        <<if _cell === null>><<break>></br><</if>>
+        /* 该格有敌人？撞上，停前一格 */
+        <<unitAtCell _dtNx _dtNy>>
+        <<if _cellUnit && _cellUnit.side !== _dtU.side>>
+          <<set _dtHitUnit = _cellUnit>>
+          <<break>>
+        <</if>>
+        /* 可站则继续推进落脚点 */
+        <<if _cell.occupiable && _cell.elevation !== "verylow" && _cellUnit === null>>
+          <<set _dtFinalX = _dtNx>>
+          <<set _dtFinalY = _dtNy>>
+        <<else>>
+          <<break>>
+        <</if>>
+      <</for>>
+
+      /* 移动到落脚点 */
+      <<set _dtU.pos = { x:_dtFinalX, y:_dtFinalY }>>
+      <<refreshStandBuff _dtU>>
+
+      /* 撞到敌人则伤害 */
+      <<if _dtHitUnit !== null>>
+        <<buildSkillOnHit _dtU _dtSk>>
+        <<runOnHit _dtHitUnit _skillOnHit _dtU 1 1>>
+        <<set $ActionLog = _dtU.name + "突刺撞向了" + _dtHitUnit.name + "！">>
+      <<else>>
+        <<set $ActionLog = _dtU.name + "向前突进。">>
+      <</if>>
+    <</if>>
+  <</if>>
+<</widget>>
+
+
+/*
+  canFlee：判断单位是否在可逃位置(地图最外圈合法格)，放 _canFlee。
+  无地图时恒为true。_args[0]=单位
+*/
+<<widget "canFlee">>
+  <<set _cfU = _args[0]>>
+  <<set _canFlee = false>>
+  <<if not $Field.grid>>
+    <<set _canFlee = true>>
+  <<elseif _cfU.pos>>
+    <<set _cfEdge = Math.min(_cfU.pos.x, $Field.grid.width - 1 - _cfU.pos.x, _cfU.pos.y, $Field.grid.height - 1 - _cfU.pos.y)>>
+    <<if _cfEdge === 0>>
+      <<set _canFlee = true>>
+    <</if>>
+  <</if>>
+<</widget>>
+
+
+/*
+  itemRole：推断道具的AI用途，放 _itemRole。
+  "heal"(onUse含heal)/"damage"(含负伤害)/"buff"(含buff)/"other"。
+  _args[0]=道具数据
+*/
+<<widget "itemRole">>
+  <<set _irItem = _args[0]>>
+  <<set _itemRole = "other">>
+  <<if _irItem.useType === "drink">>
+    /* 自用：看onUse */
+    <<if _irItem.onUse>>
+      <<for _ir = 0; _ir < _irItem.onUse.length; _ir++>>
+        <<if _irItem.onUse[_ir].kind === "heal">><<set _itemRole = "heal">><<break>>
+        <<elseif _irItem.onUse[_ir].kind === "buff">><<set _itemRole = "buff">>
+        <</if>>
+      <</for>>
+    <</if>>
+  <<elseif _irItem.useType === "throw">>
+    <<if _irItem.onUse>>
+      <<for _ir = 0; _ir < _irItem.onUse.length; _ir++>>
+        <<if _irItem.onUse[_ir].kind === "damage">><<set _itemRole = "damage">><<break>>
+        <<elseif _irItem.onUse[_ir].kind === "obscure">><<set _itemRole = "obscure">>
+        <<elseif _irItem.onUse[_ir].kind === "buff">><<set _itemRole = "debuff">>
+        <</if>>
+      <</for>>
+    <</if>>
+  <</if>>
+<</widget>>
+
+<<widget "setupCheatMerchant">>
+  <<if not $Player.weapon>>
+    <<set $Player.weapon = { name:"短剑", wtype:"sword", damageType:"physical", element:"none", baseValue:8, scaling:"atk", range:1, speedCost:10 }>>
+  <</if>>
+  <<if $Player.SpeedLevel < 40>><<set $Player.SpeedLevel = 40>><</if>>
+  <<set $Player.RemainHP = $Player.maxHP>>
+  <<set $Player.RemainMP = $Player.maxMP>>
+  <<set $Player.status = "alive">>
+
+  <<set $Units = []>>
+  <<set $UnitIdCounter = 0>>
+  <<set $ActionLog = "">>
+  <<set $BattleTurnLog = "">>
+  <<set $ActiveActorId = "">>
+  <<set $PendingSpell = "">>
+  <<set $PendingFormation = "">>
+  <<set $PendingItem = "">>
+  <<set $PendingSkill = "">>
+  <<set $CastLevelChoice = 1>>
+  <<set $AttackHeavy = 0>>
+  <<set $BattleResult = { defeated:[], expGained:0 }>>
+
+  <<enlistUnit $Player "ally" true>>
+
+  /* 商人：无mp无武器，SpeedLevel够投几次道具，带火弹+治疗药 */
+  <<spawnUnit `{
+      name:"狡猾商人", side:"enemy", type:"humanlike",
+      maxHP:120, RemainHP:120, maxMP:0, RemainMP:0,
+      MagicLevel:0, SpeedLevel:30, initiative:10, atk:3, level:5,
+      spell:[], weapon:{name:"杖",wtype:"staff",damageType:"physical",element:"none",baseValue:5,scaling:"atk",range:1,speedCost:10},
+      skill:["doubleStrike","guard"],
+      items:[ {id:"fireBomb",count:3}, {id:"healPotion",count:2} ]
+  }`>>
+
+  <<generateGrid `[$CheatTerrain]`>>
+  <<placeUnitsOnGrid>>
+
+  <<set $BattleWin = "Cheat Menu">>
+  <<set $BattleLose = "Cheat Menu">>
+  <<set $BattleFlee = "Cheat Menu">>
+  <<goto "Battle">>
+<</widget>>
+
+
+/*
+  levelRangeFromTag：从等级tag取level范围，放 _lvMin,_lvMax。
+  _args[0]=等级tag字符串
+*/
+<<widget "levelRangeFromTag">>
+  <<switch _args[0]>>
+    <<case "低级">><<set _lvMin = 3>><<set _lvMax = 20>>
+    <<case "中级">><<set _lvMin = 20>><<set _lvMax = 45>>
+    <<case "高级">><<set _lvMin = 45>><<set _lvMax = 65>>
+    <<default>><<set _lvMin = 3>><<set _lvMax = 20>>
+  <</switch>>
+<</widget>>
+
+
+/*
+  generateEnemyFromTags：按一组tag生成一个敌人单位push进$Units。
+  _args[0]=tag数组，如 ["魔物","低级"]（含一个category-tag和一个等级tag）
+  category-tag匹配物种的category或categories；等级tag定level。
+  无匹配物种→生成占位史莱姆并标记$PlaceholderEnemy=true。
+*/
+<<widget "generateEnemyFromTags">>
+  <<set _geTags = _args[0]>>
+
+  /* 拆分：等级tag vs 物种tag */
+  <<set _geLevelTags = ["低级","中级","高级"]>>
+  <<set _geLvTag = "低级">>
+  <<set _geCatTags = []>>
+  <<for _ge = 0; _ge < _geTags.length; _ge++>>
+    <<if _geLevelTags.indexOf(_geTags[_ge]) !== -1>>
+      <<set _geLvTag = _geTags[_ge]>>
+    <<else>>
+      <<run _geCatTags.push(_geTags[_ge])>>
+    <</if>>
+  <</for>>
+
+  /* 等级范围 → 随机level */
+  <<levelRangeFromTag _geLvTag>>
+  <<set _geLevel = _lvMin + Math.floor(Math.random() * (_lvMax - _lvMin + 1))>>
+
+  /* 筛选匹配物种：category 或 categories 含任一物种tag */
+  <<set _geKeys = Object.keys($SpeciesLibrary)>>
+  <<set _gePool = []>>
+  <<for _ge = 0; _ge < _geKeys.length; _ge++>>
+    <<set _geSp = $SpeciesLibrary[_geKeys[_ge]]>>
+    <<set _geMatch = false>>
+    <<for _geC = 0; _geC < _geCatTags.length; _geC++>>
+      <<set _geCt = _geCatTags[_geC]>>
+      /* 匹配category(单值)或categories(数组)或species名 */
+      <<if _geSp.category === _geCt>><<set _geMatch = true>><</if>>
+      <<if _geSp.categories && _geSp.categories.indexOf(_geCt) !== -1>><<set _geMatch = true>><</if>>
+    <</for>>
+    /* 若没指定物种tag，全池都算(任意敌人) */
+    <<if _geCatTags.length === 0>><<set _geMatch = true>><</if>>
+    <<if _geMatch>><<run _gePool.push(_geSp)>><</if>>
+  <</for>>
+
+  /* 无匹配 → 占位 */
+  <<set _gePlaceholder = false>>
+  <<if _gePool.length === 0>>
+    <<set _gePlaceholder = true>>
+    <<set $PlaceholderEnemy = true>>
+    <<if $SpeciesLibrary.slime>>
+      <<set _geChosen = $SpeciesLibrary.slime>>
+    <<else>>
+      /* 库里连史莱姆都没有：硬编码兜底 */
+      <<set _geChosen = { species:"史莱姆", category:"monster", type:[], special:[], growthRate:1.08, baseStats:{ maxHP:30, maxMP:0, MagicLevel:0, SpeedLevel:20, atk:6, initiative:8 }, res:{physical:0,magical:0,fire:0,ice:0}, weapon:null, spell:[], formation:[], skill:[], nameVariants:["史莱姆"] }>>
+    <</if>>
+    <<set _geLevel = 3>>
+  <<else>>
+    <<set _geChosen = _gePool.random()>>
+  <</if>>
+
+  /* 按level指数成长算属性 */
+  <<set _geMult = Math.pow(_geChosen.growthRate || 1.08, _geLevel - 1)>>
+  <<set _geBS = _geChosen.baseStats>>
+  <<set _geLG = _geChosen.linearGrowth || {}>>
+
+  /* 指数成长：HP、MP、atk */
+  <<set _geMaxHP = Math.round((_geBS.maxHP || 30) * _geMult)>>
+  <<set _geMaxMP = Math.round((_geBS.maxMP || 0) * _geMult)>>
+  <<set _geAtk = Math.round((_geBS.atk || 5) * _geMult)>>
+
+  /* 线性成长：SpeedLevel、MagicLevel、initiative */
+  <<set _geSL = Math.round((_geBS.SpeedLevel || 20) + (_geLG.SpeedLevel || 0) * (_geLevel - 1))>>
+  <<set _geML = Math.round((_geBS.MagicLevel || 0) + (_geLG.MagicLevel || 0) * (_geLevel - 1))>>
+  <<set _geInit = Math.round((_geBS.initiative || 8) + (_geLG.initiative || 0) * (_geLevel - 1))>>
+
+
+  /* 随机名 */
+  <<set _geName = _geChosen.species>>
+  <<if _geChosen.nameVariants && _geChosen.nameVariants.length > 0>>
+    <<set _geName = _geChosen.nameVariants.random()>>
+  <</if>>
+
+  /* 生成单位 */
+  <<set _geCat = _geChosen.category || "monster">>
+  <<set _geTraits = _geChosen.traits ? _geChosen.traits.slice() : []>>
+  <<set _geSpecies = _geChosen.species || "">>
+  <<set _geSpecial = _geChosen.special ? _geChosen.special.slice() : []>>
+  <<set _geRes = _geChosen.res ? clone(_geChosen.res) : { physical:0, magical:0, fire:0, ice:0 }>>
+  <<set _geSpell = _geChosen.spell ? _geChosen.spell.slice() : []>>
+  <<set _geFm = _geChosen.formation ? _geChosen.formation.slice() : []>>
+  <<set _geSk = _geChosen.skill ? _geChosen.skill.slice() : []>>
+  <<if _geChosen.weaponRef && $WeaponLibrary[_geChosen.weaponRef]>>
+    <<set _geWeapon = clone($WeaponLibrary[_geChosen.weaponRef])>>
+  <<elseif _geChosen.weapon>>
+    <<set _geWeapon = clone(_geChosen.weapon)>>
+  <<else>>
+    <<set _geWeapon = null>>
+  <</if>>
+
+DEBUG生成: cat=<<= _geCat>> name=<<= _geName>> lv=<<= _geLevel>><br>
+
+
+  <<spawnUnit `{
+      name: _geName,
+      side: "enemy",
+      category: _geCat,
+      traits: _geTraits,
+      species: _geSpecies,
+      special: _geSpecial,
+      status: "active",
+      maxHP: _geMaxHP, RemainHP: _geMaxHP,
+      maxMP: _geMaxMP, RemainMP: _geMaxMP,
+      MagicLevel: _geML, SpeedLevel: _geSL,
+      atk: _geAtk, initiative: _geInit,
+      res: _geRes,
+      spell: _geSpell,
+      formation: _geFm,
+      skill: _geSk,
+      items: [],
+      weapon: _geWeapon,
+      level: _geLevel
+  }`>>
+
+
+<</widget>>
+
+
+/*
+  generateEnemies：按tag组数组批量生成敌人。
+  _args[0]=tag组数组，如 [["魔物","低级"],["人类","中级"]]
+  每组生成1个。
+*/
+<<widget "generateEnemies">>
+  <<set $PlaceholderEnemy = false>>
+  <<set _gesGroups = _args[0]>>
+  <<for _ges = 0; _ges < _gesGroups.length; _ges++>>
+    <<generateEnemyFromTags _gesGroups[_ges]>>
+  <</for>>
+<</widget>>
+
+
+/*
+  initiativeCap：按等级算initiative上限，放 _initCap。
+  _args[0]=等级
+*/
+<<widget "initiativeCap">>
+  <<set _icLv = _args[0]>>
+  <<if _icLv < 20>>
+    <<set _initCap = 50>>
+  <<elseif _icLv < 40>>
+    <<set _initCap = 150>>
+  <<elseif _icLv < 60>>
+    <<set _initCap = 300>>
+  <<else>>
+    <<set _initCap = 999999>>
+  <</if>>
+<</widget>>
+
+
+/*
+  loadMap：加载固定地图到$Field.grid。_args[0]=地图key(字符串)
+*/
+<<widget "loadMap">>
+  <<set _lmKey = _args[0]>>
+  <<set _lmMap = $MapLibrary[_lmKey]>>
+  <<if _lmMap>>
+    <<set $Field.grid = { width:_lmMap.width, height:_lmMap.height, cells:clone(_lmMap.cells) }>>
+  <<else>>
+    /* 找不到地图，fallback随机生成 */
+    <<generateGrid `["plain"]`>>
+  <</if>>
+<</widget>> 

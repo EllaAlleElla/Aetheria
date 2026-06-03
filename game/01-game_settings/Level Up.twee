@@ -1,0 +1,64 @@
+:: Level Up Allocate [nobr noreturn]
+你有 <strong><<= $Player.freePoints>></strong> 点可分配。<br>
+<<if $AllocAmount === undefined || $AllocAmount < 1>><<set $AllocAmount = 1>><</if>>
+
+每次分配数量：<<textbox "$AllocAmount" $AllocAmount>>
+<<link "1">><<set $AllocAmount = 1>><<goto "Level Up Allocate">><</link>>
+<<link "10">><<set $AllocAmount = 10>><<goto "Level Up Allocate">><</link>>
+<<link "100">><<set $AllocAmount = 100>><<goto "Level Up Allocate">><</link>>
+<<link "1000">><<set $AllocAmount = 1000>><<goto "Level Up Allocate">><</link>>
+<<link "全部">><<set $AllocAmount = $Player.freePoints>><<goto "Level Up Allocate">><</link>>
+<hr>
+
+/* 算initiative上限 */
+<<initiativeCap $Player.level>>
+<<set _luaCap = _initCap>>
+
+<<set _stats = [["maxHP","生命上限"],["maxMP","魔力上限"],["atk","攻击"],["MagicLevel","魔力等级"],["SpeedLevel","速度等级"],["initiative","先攻"]]>>
+<<for _luaI = 0; _luaI < _stats.length; _luaI++>>
+  <<set _luaKey = _stats[_luaI][0]>>
+  <<set _luaName = _stats[_luaI][1]>>
+
+  <<if _luaKey === "initiative">>
+    /* initiative特殊处理：等级锁 */
+    <<if $Player.initiative >= _luaCap>>
+      /* 已达上限：灰字，不显示+按钮 */
+      <span style="opacity:0.5"><<= _luaName>>：<<= $Player[_luaKey]>>（已达当前等级上限 <<= _luaCap>>）</span>
+    <<else>>
+      /* 未达上限：显示+按钮，加点时cap住 */
+      <<= _luaName>>：<<= $Player[_luaKey]>> / 上限<<= _luaCap>>
+      <<capture _luaKey, _luaCap>>
+        <<link "+">>
+          <<set _add = Math.min(Math.floor($AllocAmount), $Player.freePoints)>>
+          /* 额外限制：不超过上限 */
+          <<set _room = _luaCap - $Player[_luaKey]>>
+          <<if _room < 0>><<set _room = 0>><</if>>
+          <<if _add > _room>><<set _add = _room>><</if>>
+          <<if _add > 0>>
+            <<set $Player[_luaKey] += _add>>
+            <<set $Player.freePoints -= _add>>
+          <</if>>
+          <<goto "Level Up Allocate">>
+        <</link>>
+      <</capture>>
+    <</if>>
+  <<else>>
+    /* 其他属性：正常加 */
+    <<= _luaName>>：<<= $Player[_luaKey]>>
+    <<capture _luaKey>>
+      <<link "+">>
+        <<set _add = Math.min(Math.floor($AllocAmount), $Player.freePoints)>>
+        <<if _add > 0>>
+          <<set $Player[_luaKey] += _add>>
+          <<set $Player.freePoints -= _add>>
+        <</if>>
+        <<goto "Level Up Allocate">>
+      <</link>>
+    <</capture>>
+  <</if>>
+  <br>
+<</for>>
+
+<br><span style="opacity:0.5;font-size:0.9em">※ 在每个等级区间，先攻的分配有所上限。（20级以下：50　40级以下：150　60级以下：300　60级以上：无限制）</span>
+<hr>
+<<link "返回">><<goto "Cheat Menu">><</link>>

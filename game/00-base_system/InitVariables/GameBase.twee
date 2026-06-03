@@ -1,2 +1,3 @@
 :: Game Base
 <<set $nsfwEnd = "">>/* nsfw段结束后转到何处 */
+<<set $return = "">>/* 当前游戏进度 */

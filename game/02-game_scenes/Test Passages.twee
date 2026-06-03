@@ -1,0 +1,476 @@
+:: Test Entrance
+这是所有测试用段落的快捷入口.
+
+
+战斗:
+1- [[Battle Data Test]]
+2- [[Battle Stat Test]]
+3- [[Battle Buff Test]]
+4- [[Battle Action Test]]
+5- [[Battle ATB Test]]
+6- [[Battle AI Test]]
+7- [[Battle Start Test1]]
+8- [[Battle Start Test2]]
+9- [[Enemy Gen Test]]
+
+
+:: Battle Data Test [nobr]
+<<set $Units = []>>
+<<set $UnitIdCounter = 0>>
+
+/* 玩家本体 */
+<<spawnUnit `{
+    name: "你",
+    side: "ally",
+    isPlayer: true,
+    type: "humanlike",
+    maxHP: 120, maxMP: 200,
+    MagicLevel: 30, SpeedLevel: 10,
+    atk: 8, initiative: 12,
+    spell: ["damage", "freeze"],
+    level: 5
+}`>>
+
+/* 一个友方单位 */
+<<spawnUnit `{
+    name: "见习骑士",
+    side: "ally",
+    type: "humanlike",
+    maxHP: 150, maxMP: 50,
+    atk: 12, initiative: 8,
+    level: 4
+}`>>
+
+/* 一个敌人 */
+<<spawnUnit `{
+    name: "蓝发的诗人",
+    side: "enemy",
+    type: "humanlike",
+    maxHP: 800, maxMP: 80000,
+    MagicLevel: 500, SpeedLevel: 10,
+    atk: 5, initiative: 10,
+    res: { physical: 0, magical: 20, fire: 0, ice: -50 },
+    spell: ["damage", "freeze", "revive", "heal"],
+    level: 12,
+    ShownGender: "他", ShownLV: "也就十几"
+}`>>
+
+/* ===== 验证输出 ===== */
+共生成 $Units.length 个单位：<br>
+<<for _i = 0; _i < $Units.length; _i++>>
+  <<set _u = $Units[_i]>>
+  [<<= _u.id>>] <<= _u.name>>（<<= _u.side>>，type=<<= _u.type>>）
+  HP <<= _u.RemainHP>>/<<= _u.maxHP>>，
+  MP <<= _u.RemainMP>>/<<= _u.maxMP>>
+  <<canControl _u>>可操作=<<= _canControl>>
+  <<isLethal _u>>致命=<<= _isLethal>>
+  <br>
+<</for>>
+
+<br>
+<<set $Settings.controlAllies = true>>
+<<set $Settings.allowLethal = true>>
+开启友方操作与致命设置后重新判断：<br>
+<<for _i = 0; _i < $Units.length; _i++>>
+  <<set _u = $Units[_i]>>
+  <<= _u.name>>：
+  <<canControl _u>>可操作=<<= _canControl>>，
+  <<isLethal _u>>致命=<<= _isLethal>>
+  <br>
+<</for>>
+
+<br>
+按id查找 "u3"：<<findUnit "u3">>
+<<if _foundUnit>><<= _foundUnit.name>><<else>>未找到<</if>>
+
+
+:: Battle Stat Test [nobr]
+<<set $BuffLibrary = {}>>      /* 阶段1先用空库，stat只取基础值 */
+<<set $Units = []>>
+<<set $UnitIdCounter = 0>>
+
+<<spawnUnit `{
+    name:"诗人", side:"enemy", type:"humanlike",
+    maxHP:100, RemainHP:100,
+    res:{ physical:0, magical:20, fire:0, ice:-50 }
+}`>>
+<<findUnit "u1">><<set _e = _foundUnit>>
+
+基础atk(stat)：<<stat _e "atk">><<= _stat>><br>
+魔法抗性：<<statRes _e "magical">><<= _resVal>>%　冰抗：<<statRes _e "ice">><<= _resVal>>%<br>
+<br>
+
+/* 100点冰魔法伤害：×(1-20/100)×(1+50/100)=×0.8×1.5=120 */
+<<applyDamage _e `{ amount:100, damageType:"magical", element:"ice", tags:["spell","ice"] }`>>
+受到100点冰魔法伤害 → 实际<<= _dmgResult.dealt>>，剩余HP <<= _e.RemainHP>>，killed=<<= _dmgResult.killed>><br>
+预期：实际120，HP归零；isLethal(敌方)=true → status=<<= _e.status>><br>
+<br>
+
+/* 测护盾：新单位带一个护盾buff */
+<<spawnUnit `{
+    name:"骑士", side:"ally", type:"humanlike",
+    maxHP:100, RemainHP:100
+}`>>
+<<findUnit "u2">><<set _a = _foundUnit>>
+<<run _a.buff.push({ id:"barrier", duration:3, durationType:"selfTurns", stack:1, extraRemoveBy:[], source:null, shield:30 })>>
+护盾总量：<<totalShield _a>><<= _totalShield>><br>
+<<applyDamage _a `{ amount:50, damageType:"physical", element:"none", tags:["physical"] }`>>
+受50物理 → 护盾吸收<<= _dmgResult.shieldAbsorbed>>，扣血后HP <<= _a.RemainHP>>（预期吸30，HP80）<br>
+护盾buff是否已移除：<<= _a.buff.length === 0 ? "是" : "否">><br>
+
+
+:: Battle Buff Test [nobr]
+<<set $BuffLibrary = {
+    frozen_slow: {
+        name:"冰冻", tags:["debuff","ice"], stackRule:"refresh",
+        apply:["snapshot"],
+        effects:[ { stat:"initiative", value:-5, scaling:"stack" }, { stat:"SpeedLevel", value:-5, scaling:"stack" } ],
+        perRound:[], flags:[], removeBy:["fire","heal"]
+    },
+    burning: {
+        name:"灼烧", tags:["debuff","fire"], stackRule:"stack",
+        apply:[],
+        effects:[],
+        perRound:[ { value:-10, damageType:"magical", element:"fire", scaling:"stack" } ],
+        flags:[], removeBy:["water"]
+    },
+    armor: {
+        name:"硬化", tags:["buff"], stackRule:"max",
+        apply:["snapshot"],
+        effects:[ { stat:"res.physical", value:30, scaling:null } ],
+        perRound:[], flags:[], removeBy:[]
+    }
+}>>
+<<set $Units = []>>
+<<set $UnitIdCounter = 0>>
+
+<<spawnUnit `{ name:"靶子", side:"enemy", type:"monster", maxHP:200, RemainHP:200, initiative:10, SpeedLevel:10, res:{physical:0,magical:0,fire:0,ice:0} }`>>
+<<findUnit "u1">><<set _t = _foundUnit>>
+
+/* refresh：施加两次冰冻，应只有1个实例，duration被刷新 */
+<<applyBuff _t `{ buffId:"frozen_slow", duration:2, stackPerLevel:1, castingLevel:3 }`>>
+<<applyBuff _t `{ buffId:"frozen_slow", duration:4, stackPerLevel:1, castingLevel:2 }`>>
+冰冻实例数(预期1)：<<= _t.buff.filter(function(b){return b.id==="frozen_slow";}).length>>
+duration(预期4)：<<= _t.buff.find(function(b){return b.id==="frozen_slow";}).duration>>
+stack(预期2)：<<= _t.buff.find(function(b){return b.id==="frozen_slow";}).stack>><br>
+冰冻下initiative(基础10-5×2=0)：<<stat _t "initiative">><<= _stat>><br>
+<br>
+
+/* stack：施加两次灼烧，应有2个独立实例 */
+<<applyBuff _t `{ buffId:"burning", duration:3, stackPerLevel:1, castingLevel:1 }`>>
+<<applyBuff _t `{ buffId:"burning", duration:3, stackPerLevel:2, castingLevel:1 }`>>
+灼烧实例数(预期2)：<<= _t.buff.filter(function(b){return b.id==="burning";}).length>><br>
+<br>
+
+/* max：施加两次硬化，取大 */
+<<applyBuff _t `{ buffId:"armor", duration:2 }`>>
+<<applyBuff _t `{ buffId:"armor", duration:5 }`>>
+硬化实例数(预期1)：<<= _t.buff.filter(function(b){return b.id==="armor";}).length>>　duration(预期5)：<<= _t.buff.find(function(b){return b.id==="armor";}).duration>><br>
+物抗(基础0+30)：<<statRes _t "physical">><<= _resVal>>%<br>
+<br>
+
+/* tickBuffs：结算DOT。两条灼烧 stack分别1和2 → 共-10-20=-30血 */
+HP结算前：<<= _t.RemainHP>>
+<<tickBuffs _t>>
+HP结算后(预期-30=170)：<<= _t.RemainHP>><br>
+冰冻duration递减后(预期3)：<<= _t.buff.find(function(b){return b.id==="frozen_slow";}).duration>><br>
+<br>
+
+/* removeBuffByTag：火攻击解冰冻(removeBy含fire)，但不解灼烧(removeBy是water) */
+<<removeBuffByTag _t `["fire"]`>>
+受火tag后，冰冻是否还在(预期否)：<<= _t.buff.some(function(b){return b.id==="frozen_slow";}) ? "在" : "已解除">>
+灼烧是否还在(预期在)：<<= _t.buff.some(function(b){return b.id==="burning";}) ? "在" : "已解除">><br>
+
+
+:: Battle Action Test [nobr]
+<<set $BuffLibrary = {
+    frozen_slow:{ name:"冰冻", tags:["debuff","ice"], stackRule:"refresh", apply:["snapshot"],
+        effects:[{stat:"initiative",value:-5,scaling:"stack"}], perRound:[], flags:[], removeBy:["fire"] }
+}>>
+<<set $SpellLibrary = {
+    freeze:{ name:"冰冻术",
+        cost:[{res:"RemainMP",value:5,scaling:"CastingLevel"}],
+        defaultTargeting:{ side:"enemy", count:1, mode:"chosen" },
+        onHit:[
+            {kind:"damage", damageType:"magical", element:"ice", value:-5, scaling:"CastingLevel", tags:["spell","ice"]},
+            {kind:"buff", buffId:"frozen_slow", duration:2, stackPerLevel:1, extraRemoveBy:[]}
+        ] },
+    meteor:{ name:"陨石", cost:[{res:"RemainMP",value:20}],
+        defaultTargeting:{ side:"enemy", count:"all", mode:"all" },
+        onHit:[ {kind:"damage", damageType:"magical", element:"fire", value:-30, scaling:null, tags:["spell","fire"]} ] },
+    triple:{ name:"三连闪", cost:[{res:"RemainMP",value:15}],
+        defaultTargeting:{ side:"enemy", count:3, mode:"random", repeatable:true },
+        onHit:[ {kind:"damage", damageType:"magical", element:"none", value:-10, scaling:null, tags:["spell"]} ] },
+    revive:{ name:"复活术", cost:[{res:"RemainMP",value:50}],
+        defaultTargeting:{ side:"ally", count:1, mode:"chosen", status:"defeated" },
+        onHit:[ {kind:"status", value:"active"}, {kind:"heal", value:50, scaling:null} ] },
+    chainsplit:{ name:"分裂闪电", cost:[{res:"RemainMP",value:10}],
+        defaultTargeting:{ side:"enemy", count:"all", mode:"all" },
+        onHit:[ {kind:"damage", damageType:"magical", element:"none", value:-300, split:true, scaling:null, tags:["spell"]} ] }
+}>>
+<<set $Units = []>>
+<<set $UnitIdCounter = 0>>
+
+<<spawnUnit `{ name:"法师", side:"ally", isPlayer:true, type:"humanlike", maxHP:100, RemainHP:100, maxMP:200, RemainMP:200, atk:8, spell:["freeze","meteor","triple","revive"], weapon:{ name:"法杖", wtype:"staff", damageType:"physical", element:"none", baseValue:5, scaling:"atk" } }`>>
+<<spawnUnit `{ name:"倒下的队友", side:"ally", type:"humanlike", maxHP:100, RemainHP:0, status:"defeated" }`>>
+<<spawnUnit `{ name:"史莱姆A", side:"enemy", type:"monster", maxHP:100, RemainHP:100, res:{physical:0,magical:0,fire:0,ice:0} }`>>
+<<spawnUnit `{ name:"史莱姆B", side:"enemy", type:"monster", maxHP:100, RemainHP:100, res:{physical:0,magical:0,fire:0,ice:0} }`>>
+<<spawnUnit `{ name:"史莱姆C", side:"enemy", type:"monster", maxHP:100, RemainHP:100, res:{physical:0,magical:0,fire:0,ice:0} }`>>
+
+/* 1. 冰冻术 指定打 u3，3级：伤害5×3=15，附冰冻 */
+<<performAction `{ actionType:"spell", sourceId:"u1", ref:"freeze", castingLevel:3, chosenIds:["u3"] }`>>
+[冰冻] <<= $ActionLog>><br>
+u3 HP(预期85)：<<findUnit "u3">><<= _foundUnit.RemainHP>>　冰冻在否：<<= _foundUnit.buff.some(function(b){return b.id==="frozen_slow";})?"是":"否">>　u1剩MP(预期185)：<<findUnit "u1">><<= _foundUnit.RemainMP>><br>
+<br>
+
+/* 2. 陨石 全体敌人 各-30 */
+<<performAction `{ actionType:"spell", sourceId:"u1", ref:"meteor" }`>>
+[陨石] <<= $ActionLog>><br>
+A/B/C HP：<<findUnit "u3">><<= _foundUnit.RemainHP>> / <<findUnit "u4">><<= _foundUnit.RemainHP>> / <<findUnit "u5">><<= _foundUnit.RemainHP>>（A因之前已85，预期55；B/C预期70）<br>
+<br>
+
+/* 3. 三连闪 随机三段各-10，总共-30分散在ABC */
+<<set _beforeTotal = 0>><<for _z=2;_z<5;_z++>><<set _beforeTotal += $Units[_z].RemainHP>><</for>>
+<<performAction `{ actionType:"spell", sourceId:"u1", ref:"triple" }`>>
+[三连闪] <<= $ActionLog>><br>
+<<set _afterTotal = 0>><<for _z=2;_z<5;_z++>><<set _afterTotal += $Units[_z].RemainHP>><</for>>
+三段总伤(预期30)：<<= _beforeTotal - _afterTotal>><br>
+<br>
+
+/* 4. 复活倒下队友 */
+<<performAction `{ actionType:"spell", sourceId:"u1", ref:"revive", chosenIds:["u2"] }`>>
+[复活] <<= $ActionLog>><br>
+u2状态(预期active)：<<findUnit "u2">><<= _foundUnit.status>>　HP(预期50)：<<= _foundUnit.RemainHP>><br>
+<br>
+
+/* 5. 普攻 打u3：法杖物理 baseValue5+atk8=13 */
+<<performAction `{ actionType:"attack", sourceId:"u1", chosenIds:["u3"] }`>>
+[普攻] <<= $ActionLog>><br>
+u3 HP(预期55-13=42)：<<findUnit "u3">><<= _foundUnit.RemainHP>><br>
+
+
+:: Battle ATB Test [nobr]
+<<set $BuffLibrary = {
+    stun:{ name:"定身", tags:["debuff"], stackRule:"refresh", apply:[], effects:[], perRound:[], flags:["cannotAct"], removeBy:[], durationType:"selfTurns" }
+}>>
+<<set $SpellLibrary = {}>>
+<<set $Units = []>>
+<<set $UnitIdCounter = 0>>
+<<set $ActionLog = "">>
+
+/* 三个不同先攻的单位，全设为不可控(side enemy)以走AI兜底分支，便于自动轮转观察 */
+<<spawnUnit `{ name:"快(20)", side:"enemy", initiative:20, maxHP:100, RemainHP:100 }`>>
+<<spawnUnit `{ name:"中(10)", side:"enemy", initiative:10, maxHP:100, RemainHP:100 }`>>
+<<spawnUnit `{ name:"慢(5)",  side:"enemy", initiative:5,  maxHP:100, RemainHP:100 }`>>
+
+/* 给"中"上一个2回合定身，观察它被跳过 */
+<<applyBuff $Units[1] `{ buffId:"stun", duration:2 }`>>
+
+模拟前12次行动顺序（quick应约为slow的4倍、mid的2倍频率；mid前两次被定身跳过）：<br>
+<<for _turn = 1; _turn <= 12; _turn++>>
+  <<takeTurn>>
+  <<if _turnUnitId === null>>
+    [<<= _turn>>] 无人可行动<br>
+  <<else>>
+    <<findUnit _turnUnitId>>
+    [<<= _turn>>] tick=<<= $Field.tick>> 轮到 <<= _foundUnit.name>>　<<= $ActionLog>><br>
+  <</if>>
+<</for>>
+
+
+:: Battle AI Test [nobr]
+<<set $BuffLibrary = {
+    frozen_slow:{ name:"冰冻", tags:["debuff","ice"], category:"other", stackRule:"refresh", apply:["snapshot"], effects:[{stat:"initiative",value:-5,scaling:"stack"}], perRound:[], flags:[], removeBy:["fire"], durationType:"selfTurns" },
+    bless:{ name:"祝福", tags:["buff"], category:"survival", stackRule:"refresh", apply:["snapshot"], effects:[{stat:"maxHP",value:50,scaling:null}], perRound:[], flags:[], removeBy:[], durationType:"selfTurns" }
+}>>
+<<set $SpellLibrary = {
+    damage:{ name:"致伤术", aiRole:"damage", cost:[{res:"RemainMagicLevel",value:1,scaling:"CastingLevel"},{res:"RemainMP",value:5,scaling:"CastingLevel"}],
+        defaultTargeting:{side:"enemy",count:1,mode:"chosen"},
+        onHit:[{kind:"damage",damageType:"magical",element:"none",value:-30,scaling:"CastingLevel",tags:["spell"]}] },
+    meteor:{ name:"陨石", aiRole:"aoe", cost:[{res:"RemainMagicLevel",value:5},{res:"RemainMP",value:50}],
+        defaultTargeting:{side:"enemy",count:"all",mode:"all"},
+        onHit:[{kind:"damage",damageType:"magical",element:"fire",value:-40,scaling:"CastingLevel",tags:["spell","fire"]}] },
+    freeze:{ name:"冰冻术", aiRole:"debuff", cost:[{res:"RemainMagicLevel",value:1},{res:"RemainMP",value:5}],
+        defaultTargeting:{side:"enemy",count:1,mode:"chosen"},
+        onHit:[{kind:"damage",damageType:"magical",element:"ice",value:-5,scaling:null,tags:["spell","ice"]},{kind:"buff",buffId:"frozen_slow",duration:2,stackPerLevel:1}] },
+    heal:{ name:"治疗术", aiRole:"heal", cost:[{res:"RemainMagicLevel",value:1,scaling:"CastingLevel"},{res:"RemainMP",value:3,scaling:"CastingLevel"}],
+        defaultTargeting:{side:"ally",count:1,mode:"chosen"},
+        onHit:[{kind:"heal",value:40,scaling:"CastingLevel"}] },
+    bless:{ name:"祝福术", aiRole:"buff", buffTier:"survival", cost:[{res:"RemainMagicLevel",value:1},{res:"RemainMP",value:10}],
+        defaultTargeting:{side:"ally",count:1,mode:"chosen"},
+        onHit:[{kind:"buff",buffId:"bless",duration:5}] }
+}>>
+<<set $Units = []>>
+<<set $UnitIdCounter = 0>>
+<<set $ActionLog = "">>
+<<set $BattleTurnLog = "">>
+
+/* 敌方法师：高MagicLevel可连续行动 */
+<<spawnUnit `{ name:"敌法师", side:"enemy", initiative:10, maxHP:200, RemainHP:200, maxMP:500, RemainMP:500, MagicLevel:20, SpeedLevel:3, atk:5, spell:["damage","meteor","freeze","heal","bless"], weapon:{name:"杖",wtype:"staff",damageType:"physical",element:"none",baseValue:5,scaling:"atk"} }`>>
+/* 玩家方 */
+<<spawnUnit `{ name:"玩家", side:"ally", isPlayer:true, maxHP:120, RemainHP:120 }`>>
+
+直接调一次aiAct观察敌法师的连续行动：<br>
+<<aiAct $Units[0]>>
+<<= $BattleTurnLog.replace(/\n/g,"<br>")>><br>
+<br>
+敌法师剩余 RemainMagicLevel：<<= $Units[0].RemainMagicLevel>>　RemainMP：<<= $Units[0].RemainMP>>　turnCount：<<= $Units[0].turnCount>><br>
+玩家 HP：<<= $Units[1].RemainHP>>（满120-30×n伤害；前期保留50%MP=250，应只放到MP接近250为止）<br>
+
+
+
+:: Battle Start Test1 [nobr]
+<<set $BuffLibrary = {
+    frozen_slow:{ name:"冰冻", tags:["debuff","ice"], category:"other", stackRule:"refresh", apply:["snapshot"], effects:[{stat:"initiative",value:-5,scaling:"stack"}], perRound:[], flags:[], removeBy:["fire"], durationType:"selfTurns" }
+}>>
+<<set $SpellLibrary = {
+    damage:{ name:"致伤术", aiRole:"damage", cost:[{res:"RemainMagicLevel",value:1,scaling:"CastingLevel"},{res:"RemainMP",value:5,scaling:"CastingLevel"}], defaultTargeting:{side:"enemy",count:1,mode:"chosen"}, onHit:[{kind:"damage",damageType:"magical",element:"none",value:-30,scaling:"CastingLevel",tags:["spell"]}] },
+    freeze:{ name:"冰冻术", aiRole:"debuff", cost:[{res:"RemainMagicLevel",value:1},{res:"RemainMP",value:5}], defaultTargeting:{side:"enemy",count:1,mode:"chosen"}, onHit:[{kind:"damage",damageType:"magical",element:"ice",value:-5,scaling:null,tags:["spell","ice"]},{kind:"buff",buffId:"frozen_slow",duration:2,stackPerLevel:1}] },
+    heal:{ name:"治疗术", aiRole:"heal", cost:[{res:"RemainMagicLevel",value:1,scaling:"CastingLevel"},{res:"RemainMP",value:3,scaling:"CastingLevel"}], defaultTargeting:{side:"ally",count:1,mode:"chosen"}, onHit:[{kind:"heal",value:40,scaling:"CastingLevel"}] }
+}>>
+<<set $Units = []>>
+<<set $UnitIdCounter = 0>>
+<<set $ActionLog = "">>
+<<set $BattleTurnLog = "">>
+<<set $ActiveActorId = "">>
+<<set $PendingSpell = "">>
+<<set $CastLevelChoice = 1>>
+
+<<spawnUnit `{ name:"你", side:"ally", isPlayer:true, type:"humanlike", maxHP:120, RemainHP:120, maxMP:100, RemainMP:100, MagicLevel:10, SpeedLevel:2, initiative:12, atk:10, spell:["damage","freeze","heal"], weapon:{name:"短剑",wtype:"sword",damageType:"physical",element:"none",baseValue:8,scaling:"atk"} }`>>
+<<spawnUnit `{ name:"哥布林甲", side:"enemy", type:"monster", maxHP:60, RemainHP:60, maxMP:0, RemainMP:0, MagicLevel:0, SpeedLevel:1, initiative:8, atk:6, spell:[], weapon:{name:"棍棒",wtype:"club",damageType:"physical",element:"none",baseValue:6,scaling:"atk"} }`>>
+<<spawnUnit `{ name:"哥布林乙", side:"enemy", type:"monster", maxHP:60, RemainHP:60, maxMP:0, RemainMP:0, MagicLevel:0, SpeedLevel:1, initiative:7, atk:6, spell:[], weapon:{name:"棍棒",wtype:"club",damageType:"physical",element:"none",baseValue:6,scaling:"atk"} }`>>
+
+<<set $BattleWin = "Battle Win Test1">>
+<<set $BattleLose = "Battle Lose Test2">>
+<<goto "Battle">>
+
+
+:: Battle Win Test1
+你赢了！
+<<set $Units = []>>
+
+:: Battle Lose Test2
+你倒下了……
+<<set $Units = []>>
+
+
+:: Battle Start Test2 [nobr]
+<<set $BuffLibrary = {
+    frozen_slow:{ name:"冰冻", tags:["debuff","ice"], category:"other", stackRule:"refresh", apply:["snapshot"], effects:[{stat:"initiative",value:-5,scaling:"stack"}], perRound:[], flags:[], removeBy:["fire"], durationType:"selfTurns" }
+}>>
+<<set $SpellLibrary = {
+    damage:{ name:"致伤术", aiRole:"damage", cost:[{res:"RemainMagicLevel",value:1,scaling:"CastingLevel"},{res:"RemainMP",value:5,scaling:"CastingLevel"}], defaultTargeting:{side:"enemy",count:1,mode:"chosen"}, onHit:[{kind:"damage",damageType:"magical",element:"none",value:-30,scaling:"CastingLevel",tags:["spell"]}] },
+    freeze:{ name:"冰冻术", aiRole:"debuff", cost:[{res:"RemainMagicLevel",value:1},{res:"RemainMP",value:5}], defaultTargeting:{side:"enemy",count:1,mode:"chosen"}, onHit:[{kind:"damage",damageType:"magical",element:"ice",value:-5,scaling:null,tags:["spell","ice"]},{kind:"buff",buffId:"frozen_slow",duration:2,stackPerLevel:1}] },
+    heal:{ name:"治疗术", aiRole:"heal", cost:[{res:"RemainMagicLevel",value:1,scaling:"CastingLevel"},{res:"RemainMP",value:3,scaling:"CastingLevel"}], defaultTargeting:{side:"ally",count:1,mode:"chosen"}, onHit:[{kind:"heal",value:40,scaling:"CastingLevel"}] }
+}>>
+<<set $Units = []>>
+<<set $UnitIdCounter = 0>>
+<<set $ActionLog = "">>
+<<set $BattleTurnLog = "">>
+<<set $ActiveActorId = "">>
+<<set $PendingSpell = "">>
+<<set $CastLevelChoice = 1>>
+<<set $BattleResult = { defeated:[], expGained:0 }>>
+
+/* 给玩家持久对象临时补点战斗力以便测试 */
+<<set $Player.maxHP = 120>><<set $Player.RemainHP = 120>>
+<<set $Player.maxMP = 100>><<set $Player.RemainMP = 100>>
+<<set $Player.MagicLevel = 10>><<set $Player.SpeedLevel = 2>>
+<<set $Player.initiative = 12>><<set $Player.atk = 10>>
+<<set $Player.spell = ["damage","freeze","heal"]>>
+<<set $Player.weapon = { name:"短剑", wtype:"sword", damageType:"physical", element:"none", baseValue:8, scaling:"atk" }>>
+<<set $Player.level = 3>>
+
+/* 玩家入场 */
+<<enlistUnit $Player "ally" true>>
+
+/* 敌人(杂兵，直接spawn，无持久对象) */
+<<spawnUnit `{ name:"哥布林甲", side:"enemy", type:"monster", maxHP:60, RemainHP:60, maxMP:0, RemainMP:0, MagicLevel:0, SpeedLevel:1, initiative:8, atk:6, level:2, weapon:{name:"棍棒",wtype:"club",damageType:"physical",element:"none",baseValue:6,scaling:"atk"} }`>>
+<<spawnUnit `{ name:"哥布林乙", side:"enemy", type:"monster", maxHP:60, RemainHP:60, maxMP:0, RemainMP:0, MagicLevel:0, SpeedLevel:1, initiative:7, atk:6, level:2, weapon:{name:"棍棒",wtype:"club",damageType:"physical",element:"none",baseValue:6,scaling:"atk"} }`>>
+
+<<set $BattleWin = "Battle Win Test2">>
+<<set $BattleLose = "Battle Lose Test2">>
+<<goto "Battle">>
+
+
+:: Battle Win Test2 [nobr]
+你赢了！获得 <<= $BattleResult.expGained>> 经验。<br>
+当前玩家：等级 <<= $Player.level>>，经验 <<= $Player.exp>>，HP <<= $Player.RemainHP>>/<<= $Player.maxHP>>
+<<set $Units = []>>
+
+
+:: Reinforcement Test [nobr]
+<<set $Units = []>>
+<<set $UnitIdCounter = 0>>
+<<set $ActionLog = "">>
+<<set $BattleTurnLog = "">>
+<<set $ActiveActorId = "">>
+<<set $PendingSpell = "">>
+<<set $PendingFormation = "">>
+<<set $PendingItem = "">>
+<<set $CastLevelChoice = 1>>
+<<set $AttackHeavy = 0>>
+<<set $BattleResult = { defeated:[], expGained:0 }>>
+
+/* 玩家入场 */
+<<if not $Player.weapon>>
+  <<set $Player.weapon = { name:"短剑", wtype:"sword", damageType:"physical", element:"none", baseValue:8, scaling:"atk", range:1, speedCost:10 }>>
+<</if>>
+<<if $Player.spell.length === 0>>
+  <<set $Player.spell = ["damage","freeze","heal"]>>
+<</if>>
+<<if $Player.SpeedLevel < 40>><<set $Player.SpeedLevel = 40>><</if>>
+<<set $Player.RemainHP = $Player.maxHP>>
+<<set $Player.RemainMP = $Player.maxMP>>
+<<set $Player.status = "alive">>
+<<enlistUnit $Player "ally" true>>
+
+/* 初始1个哥布林 */
+<<spawnUnit `{ name:"哥布林", side:"enemy", type:"monster", maxHP:60, RemainHP:60, maxMP:0, RemainMP:0, MagicLevel:0, SpeedLevel:30, initiative:8, atk:6, level:2, weapon:{name:"棍棒",wtype:"club",damageType:"physical",element:"none",baseValue:6,scaling:"atk",range:1,speedCost:10} }`>>
+
+/* 生成地图 + 摆位 */
+<<generateGrid `["plain"]`>>
+<<placeUnitsOnGrid>>
+
+/* ===== 安排援军：30个tick后一个弓手敌人加入 ===== */
+<<scheduleReinforcement 30 `{ name:"援军弓手", side:"enemy", type:"humanlike", maxHP:80, RemainHP:80, maxMP:0, RemainMP:0, MagicLevel:0, SpeedLevel:30, initiative:12, atk:8, level:5, weapon:{name:"长弓",wtype:"bow",damageType:"physical",element:"none",baseValue:10,scaling:"atk",range:6,minRange:2,speedCost:10} }`>>
+
+<<set $BattleWin = "Cheat Menu">>
+<<set $BattleLose = "Cheat Menu">>
+<<set $BattleFlee = "Cheat Menu">>
+<<goto "Battle">>
+
+
+
+:: Enemy Gen Test [nobr noreturn]
+<<set $Units = []>>
+<<set $UnitIdCounter = 0>>
+<<set $ActionLog = "">>
+<<set $BattleTurnLog = "">>
+<<set $ActiveActorId = "">>
+<<set $PendingSpell = "">><<set $PendingFormation = "">><<set $PendingItem = "">><<set $PendingSkill = "">>
+<<set $CastLevelChoice = 1>><<set $AttackHeavy = 0>>
+<<set $BattleResult = { defeated:[], expGained:0 }>>
+
+<<if $Player.SpeedLevel < 40>><<set $Player.SpeedLevel = 40>><</if>>
+<<set $Player.RemainHP = $Player.maxHP>><<set $Player.RemainMP = $Player.maxMP>>
+<<set $Player.status = "alive">>
+<<enlistUnit $Player "ally" true>>
+
+/* 生成：两组tag */
+<<generateEnemies `[["monster","低级"],["monster","中级"]]`>>
+
+/* 显示生成结果(不进战斗，先看数据) */
+生成了 <<= $Units.length - 1>> 个敌人：<br>
+<<for _egt = 0; _egt < $Units.length; _egt++>>
+  <<if $Units[_egt].side === "enemy">>
+    <<= $Units[_egt].name>>　Lv<<= $Units[_egt].level>>　HP<<= $Units[_egt].maxHP>>　atk<<= $Units[_egt].atk>>　init<<= $Units[_egt].initiative>>　category=<<= $Units[_egt].category>>　traits=<<= $Units[_egt].traits>><br>
+  <</if>>
+<</for>>
+<<if $PlaceholderEnemy>>（含占位敌人）<</if>><br>
+<hr>
+<<set $Field = { buff:[], triggers:[], tick:0, round:1, grid:null }>>
+<<generateGrid `[$CheatTerrain]`>>
+<<placeUnitsOnGrid>>
+<<set $BattleWin = "Cheat Menu">><<set $BattleLose = "Cheat Menu">><<set $BattleFlee = "Cheat Menu">>
+<<link "进入战斗">><<goto "Battle">><</link>>

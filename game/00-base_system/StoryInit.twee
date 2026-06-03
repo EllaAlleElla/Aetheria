@@ -16,3 +16,8 @@
 <<include "Library-Spell Casting">>
 <<include "Library-Formation">>
 <<include "Library-Artifice">>
+<<include "Library-Buff">>
+<<include "Library-Skill">>
+<<include "Library-Species">>
+<<include "Library-Weapon">>
+<<include "Library-Map">>

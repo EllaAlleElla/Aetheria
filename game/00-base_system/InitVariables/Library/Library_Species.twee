@@ -1,0 +1,21 @@
+:: Library-Species
+<<set $SpeciesLibrary = {
+    slime: {
+        species: "史莱姆",
+        category: "monster",
+        categories: ["monster"],   /* 可匹配的物种tag(多个) */
+        traits: ["aquatic"],
+        special: [],
+        growthRate: 1.03,
+        linearGrowth: {         /* 线性成长(每级+X) */
+            SpeedLevel: 1,
+            MagicLevel: 0,
+            initiative: 0.5
+        },
+        baseStats: { maxHP:30, maxMP:0, MagicLevel:0, SpeedLevel:20, atk:6, initiative:8 },
+        res: { physical:0, magical:0, fire:-20, ice:20 },
+        weaponRef: "unarmed",
+        spell:[], formation:[], skill:[],
+        nameVariants: ["史莱姆","蓝色史莱姆","黏液怪"]
+    }
+}>>

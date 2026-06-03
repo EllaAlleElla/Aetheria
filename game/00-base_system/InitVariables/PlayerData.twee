@@ -1,18 +1,34 @@
 :: Player Data
-<<set $PlayerName = "A">>/* 玩家名称 */
-<<set $PlayerNickname = "小A">>/* 玩家昵称 */
-<<set $PlayerSpecialAttitude = "">>/* 玩家是否有特殊态度 */
-<<set $Player={
-    name:"A",
-    hp:50,
-    RemainHP:50,
-    mp:50,
-    RemainMP:50,
-    atk:5,
-    SpeedLevel:10,
-    RemainSpeedLevel:10,
-    MagicLevel:10,
-    RemainMagicLevel:10,
-    spell:[],
-    status:"alive"
+<<set $PlayerName = "A">>
+<<set $PlayerNickname = "小A">>
+<<set $PlayerSpecialAttitude = "">>
+
+<<set $Player = {
+    originId: "player",
+    name: "A",
+    category: "humanlike",
+    traits: [],
+    species: "",
+    special: [],
+
+    level: 1,
+    exp: 0,
+
+    maxHP: 50,  RemainHP: 50,
+    maxMP: 50,  RemainMP: 50,
+    MagicLevel: 10, SpeedLevel: 20,
+    atk: 5,
+    initiative: 10,
+    res: { physical:0, magical:0, fire:0, ice:0 },
+
+    spell: [],
+    formation: [],
+    items: [],
+    skill: [],
+    weapon: null,
+
+    status: "alive"
 }>>
+
+/* 特殊npc数组, 数据都存在各自的独立passage里 */
+<<set $PersistNPC = {}>>

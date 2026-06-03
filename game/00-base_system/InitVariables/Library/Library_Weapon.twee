@@ -1,0 +1,41 @@
+:: Library-Weapon
+<<set $WeaponLibrary = {
+    unarmed: {
+        name:"空手", wtype:"unarmed", damageType:"physical", element:"none",
+        baseValue:2, scaling:"atk", range:1, speedCost:10
+    },
+    shortSword: {
+        name:"短剑", wtype:"sword", damageType:"physical", element:"none",
+        baseValue:8, scaling:"atk", range:1, speedCost:10
+    },
+    greatSword: {
+        name:"巨剑", wtype:"greatsword", damageType:"physical", element:"none",
+        baseValue:20, scaling:"atk", range:1, speedCost:20
+    },
+    fireEnchantSword: {
+        name:"火附魔剑", wtype:"sword", damageType:"physical", element:"none",
+        baseValue:8, scaling:"atk", range:1, speedCost:10,
+        enchant:[{element:"fire",value:6}]
+    },
+    shortBow: {
+        name:"短弓", wtype:"bow", damageType:"physical", element:"none",
+        baseValue:6, scaling:"atk", range:5, minRange:2, speedCost:10
+    },
+    longBow: {
+        name:"长弓", wtype:"bow", damageType:"physical", element:"none",
+        baseValue:10, scaling:"atk", range:6, minRange:2, speedCost:10
+    },
+    staff: {
+        name:"法杖", wtype:"staff", damageType:"physical", element:"none",
+        baseValue:5, scaling:"atk", range:1, speedCost:10
+    },
+    club: {
+        name:"棍棒", wtype:"club", damageType:"physical", element:"none",
+        baseValue:6, scaling:"atk", range:1, speedCost:10
+    },
+    demonClaw: {
+        name:"魔爪", wtype:"claw", damageType:"physical", element:"none",
+        baseValue:30, scaling:"atk", range:1, speedCost:15
+    },
+
+}>>

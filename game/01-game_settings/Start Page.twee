@@ -6,7 +6,9 @@
 [[查看说明|Readme]]
 [[更新数据|Update Variables]]
 [[测试快捷入口|Valentia-Central Park]]
+[[战斗测试快捷入口|Test Entrance]]
 [[测试用快捷改数据|Test-Change Data]]
+[[作弊菜单|Cheat Menu]]
 
 :: Test-Change Data
 这个页面用于快捷更改数据以测试分支，不会在后续版本中稳定存在。
@@ -69,6 +71,10 @@ nsfw内容：游戏中是否出现nsfw内容。不知道这个词是什么意思
 github链接：https://github.com/EllaAlleElla/Aetheria
 
 如果你出于任何原因想要联系我，可以加qq1393480758，其他方式找我不一定能及时得到回复。
+
+
+[[返回开始页面|Start]]
+
 
 <span style="opacity: 0.5">
 从透明文字开始都是碎碎念，可自由选择不看。
@@ -156,3 +162,6 @@ airp你就看去吧，我的眼里闪过决绝与犹豫，轻的，缓的，“�
 
 其实是因为我懒得写新手开局了，想先写我想玩的部分测试一下，玩家的变量什么的我都没管，本质上这个版本是不可玩的。
 </span>
+
+
+[[返回开始页面|Start]]

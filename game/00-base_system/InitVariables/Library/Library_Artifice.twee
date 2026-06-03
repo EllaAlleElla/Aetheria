@@ -1,1 +1,45 @@
 :: Library-Artifice
+<<set $ArtificeLibrary={
+    healPotion: {
+        name:"治疗药水",
+        useType:"drink",          // drink自己用 / throw投掷选目标 / cast施法载体 / field场地
+        actionCost:[{res:"RemainSpeedLevel",value:5}],  // 用道具的行动消耗(物理动作)
+        targeting:{ side:"self", count:1, mode:"self" },
+        onUse:[ {kind:"heal", value:80} ]
+    },
+    fireBomb: {
+        name:"炼金火弹", useType:"throw",
+        actionCost:[{res:"RemainSpeedLevel",value:5}],
+        areaRadius:1,
+        onUse:[ {kind:"damage", damageType:"magical", element:"fire", value:-60, scaling:null, tags:["alchemy","fire"]} ]
+    },
+    damageStone: {
+        name:"致伤魔石",
+        useType:"cast",           // 施法载体：用道具的mp释放一个法术
+        actionCost:[{res:"RemainSpeedLevel",value:5}],
+        spellRef:"damage",        // 引用SpellLibrary的法术
+        infusedMP:50,             // 道具自带魔力，代替施法者mp
+        castingLevel:1
+    },
+    smokeBomb: {
+        name:"烟雾弹",
+        useType:"throw",
+        actionCost:[{res:"RemainSpeedLevel",value:5}],
+        targeting:{ side:"enemy", count:1, mode:"chosen" },
+        onUse:[ {kind:"obscure", radius:1} ]
+    },
+    sealedFormation: {
+        name:"封印·神圣防护",
+        useType:"formation",      // 预制法阵：用道具直接布阵，不耗施法者
+        actionCost:[{res:"RemainSpeedLevel",value:5}],
+        formationRef:"DivineProtection",
+        infusedLevel:5            // 道具灌注的等级，等同CastingLevel
+    },
+        poisonVial: {
+        name:"毒瓶",
+        useType:"throw",
+        actionCost:[{res:"RemainSpeedLevel",value:5}],
+        targeting:{ side:"enemy", count:1, mode:"chosen" },
+        onUse:[ {kind:"buff", buffId:"poisoned", duration:5, stackPerLevel:1} ]
+    },
+}>>
