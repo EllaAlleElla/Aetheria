@@ -1,0 +1,28 @@
+:: Loot Display [nobr]
+<<if $BattleLoot.length > 0>>
+  <h3>战利品</h3>
+  <<for _ldI = 0; _ldI < $BattleLoot.length; _ldI++>>
+    <<set _ldEntry = $BattleLoot[_ldI]>>
+    <<set _ldDef = $ArtificeLibrary[_ldEntry.id]>>
+    <<set _ldName = _ldDef ? _ldDef.name : _ldEntry.id>>
+    <<= _ldName>>×<<= _ldEntry.count>>
+    <<set _ldId = _ldEntry.id>>
+    <<capture _ldId, _ldName>>
+      <<link "拾取">>
+        <<pickupLoot _ldId>>
+        <<goto "Loot Display">>
+      <</link>>
+    <</capture>>
+    <br>
+  <</for>>
+  <br>
+  <<link "全部拾取">>
+    <<pickupAllLoot>>
+    <<goto "Loot Display">>
+  <</link>>
+  <hr>
+<<else>>
+  <<if $BattleLootDay >= 0>>
+    <span style="opacity:0.5">（没有战利品）</span><br>
+  <</if>>
+<</if>>

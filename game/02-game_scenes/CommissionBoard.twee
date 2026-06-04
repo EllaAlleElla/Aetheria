@@ -1,0 +1,76 @@
+:: Commission Board [nobr noreturn]
+<h2>委托板</h2>
+<<if $CurrentRegion === "">>
+  <em>你不在任何有委托板的地区。</em><br>
+  <<link "返回">><<goto $return>><</link>>
+<<else>>
+
+  /* 检查刷新 */
+  <<checkCommissionRefresh $Player.level>>
+
+  /* 声望信息 */
+  <<updateAdventurerRank>>
+  <<nextRankThreshold>>
+  <div style="margin-bottom:8px">
+    冒险者称号：<strong><<= $AdventurerRank>></strong>
+    声望：<<= $AdventurerRep>> / <<= _nextThreshold>>
+    累计完成：<<= $AdventurerCompletedCount>>件
+    持有金币：<<= $Gold>>
+  </div>
+  <hr>
+
+  <<set _tierColors = { D:"#8c8", C:"#8cf", B:"#fc8", A:"#f88", S:"#f8f", EX:"#ff4" }>>
+  <<set _tierNames = { D:"D级", C:"C级", B:"B级", A:"A级", S:"S级", EX:"特级" }>>
+
+  <<for _cbI = 0; _cbI < $CommissionBoard.length; _cbI++>>
+    <<set _cbC = $CommissionBoard[_cbI]>>
+    <<if _cbC !== null>>
+      <div style="border:1px solid #555; padding:8px; margin:4px 0;">
+        <strong style="color:<<= _tierColors[_cbC.tier] || '#fff'>>">
+          <<if _cbC.isSpecial>>★<</if>>【<<= _tierNames[_cbC.tier] || _cbC.tier>>】
+        </strong>
+        <<= _cbC.description>><br>
+        地点：<<= _cbC.locationName>>
+        敌人数量：<<= _cbC.totalEnemies>>
+        <<if _cbC.enemyGroups && _cbC.enemyGroups.length > 0>>
+          等级：<<= _cbC.enemyGroups[0].lvMin>>~<<= _cbC.enemyGroups[0].lvMax>>
+        <<elseif _cbC.isSpecial>>
+          等级：特殊
+        <</if>><br>
+        奖励：经验<<= _cbC.expReward>>　金币<<= _cbC.goldReward>>　声望+<<= _cbC.repReward>><br>
+        <<if _cbC.status === "available">>
+          /* 检查是否已有接取的委托 */
+          <<if $ActiveCommission !== -1>>
+            <span style="opacity:0.5">（已接取其他委托）</span>
+          <<else>>
+            <<set _cbIdx = _cbI>>
+            <<capture _cbIdx>>
+              <<link "接取">>
+                <<set $ActiveCommission = _cbIdx>>
+                <<set $CommissionBoard[_cbIdx].status = "accepted">>
+                <<goto "Commission Board">>
+              <</link>>
+            <</capture>>
+          <</if>>
+        <<elseif _cbC.status === "accepted">>
+          <span style="color:#ff0">已接取</span>
+          <<set _cbIdx = _cbI>>
+          <<capture _cbIdx>>
+            <<link "放弃">>
+              <<set $ActiveCommission = -1>>
+              <<set $CommissionBoard[_cbIdx].status = "available">>
+              <<goto "Commission Board">>
+            <</link>>
+          <</capture>>
+        <<elseif _cbC.status === "completed">>
+          <span style="opacity:0.5">已完成</span>
+        <<elseif _cbC.status === "expired">>
+          <span style="opacity:0.4">已过期</span>
+        <</if>>
+      </div>
+    <</if>>
+  <</for>>
+
+  <hr>
+  <<link "返回">><<goto $return>><</link>>
+<</if>>

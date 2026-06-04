@@ -1,0 +1,727 @@
+:: Commission Widgets [widget nobr]
+
+/* ===================================================================
+   评级系统
+   =================================================================== */
+
+/*
+  commissionTierWeights：根据玩家等级返回各评级的权重。
+  放 _tierWeights = { D:权重, C:权重, B:权重, A:权重, S:权重, EX:权重 }
+  _args[0]=玩家等级
+*/
+<<widget "commissionTierWeights">>
+  <<set _ctLv = _args[0]>>
+  <<if _ctLv < 20>>
+    <<set _tierWeights = { D:80, C:20, B:0, A:0, S:0, EX:0 }>>
+  <<elseif _ctLv < 35>>
+    <<set _tierWeights = { D:20, C:20, B:60, A:0, S:0, EX:0 }>>
+  <<elseif _ctLv < 50>>
+    <<set _tierWeights = { D:0, C:0, B:40, A:50, S:10, EX:0 }>>
+  <<else>>
+    <<set _tierWeights = { D:0, C:0, B:5, A:40, S:50, EX:5 }>>
+  <</if>>
+<</widget>>
+
+
+/*
+  rollCommissionTier：按权重随机抽取一个评级，放 _rolledTier。
+  _args[0]=玩家等级
+*/
+<<widget "rollCommissionTier">>
+  <<commissionTierWeights _args[0]>>
+  <<set _rctKeys = ["D","C","B","A","S","EX"]>>
+  <<set _rctTotal = 0>>
+  <<for _rctI = 0; _rctI < _rctKeys.length; _rctI++>>
+    <<set _rctTotal += _tierWeights[_rctKeys[_rctI]]>>
+  <</for>>
+  <<set _rctRoll = Math.floor(Math.random() * _rctTotal)>>
+  <<set _rctAccum = 0>>
+  <<set _rolledTier = "D">>
+  <<for _rctI = 0; _rctI < _rctKeys.length; _rctI++>>
+    <<set _rctAccum += _tierWeights[_rctKeys[_rctI]]>>
+    <<if _rctRoll < _rctAccum>>
+      <<set _rolledTier = _rctKeys[_rctI]>>
+      <<break>>
+    <</if>>
+  <</for>>
+<</widget>>
+
+
+/* ===================================================================
+   评级 → 数值序号（用于比较大小）
+   =================================================================== */
+
+/*
+  tierToNum：把评级字符串转成数字方便比较，放 _tierNum。
+  D=0 C=1 B=2 A=3 S=4 EX=5
+  _args[0]=评级字符串
+*/
+<<widget "tierToNum">>
+  <<set _tnMap = { D:0, C:1, B:2, A:3, S:4, EX:5 }>>
+  <<set _tierNum = (_tnMap[_args[0]] !== undefined) ? _tnMap[_args[0]] : 0>>
+<</widget>>
+
+
+/* ===================================================================
+   敌人规格
+   =================================================================== */
+
+/*
+  commissionEnemySpec：根据评级生成敌人规格。
+  放 _commSpec = { tier, enemyGroups: [ {lvMin, lvMax, count}, ... ] }
+  _args[0]=评级字符串
+*/
+<<widget "commissionEnemySpec">>
+  <<set _cesTier = _args[0]>>
+  <<set _cesGroups = []>>
+
+  <<switch _cesTier>>
+
+    <<case "D">>
+      <<set _cesCount = 1 + Math.floor(Math.random() * 3)>>
+      <<set _cesMaxLv = 20 - (_cesCount - 1) * 3>>
+      <<if _cesMaxLv < 5>><<set _cesMaxLv = 5>><</if>>
+      <<run _cesGroups.push({ lvMin:1, lvMax:_cesMaxLv, count:_cesCount })>>
+
+    <<case "C">>
+      <<set _cesCount = 1 + Math.floor(Math.random() * 5)>>
+      <<set _cesMaxLv = 25 - (_cesCount - 1) * 2>>
+      <<if _cesMaxLv < 15>><<set _cesMaxLv = 15>><</if>>
+      <<run _cesGroups.push({ lvMin:15, lvMax:_cesMaxLv, count:_cesCount })>>
+
+    <<case "B">>
+      <<if Math.random() < 0.5>>
+        <<set _cesCount = 1 + Math.floor(Math.random() * 3)>>
+        <<set _cesMaxLv = 35 - (_cesCount - 1) * 3>>
+        <<if _cesMaxLv < 25>><<set _cesMaxLv = 25>><</if>>
+        <<run _cesGroups.push({ lvMin:25, lvMax:_cesMaxLv, count:_cesCount })>>
+      <<else>>
+        <<set _cesCount = 5 + Math.floor(Math.random() * 4)>>
+        <<run _cesGroups.push({ lvMin:10, lvMax:20, count:_cesCount })>>
+      <</if>>
+
+    <<case "A">>
+      <<set _cesCount = 1 + Math.floor(Math.random() * 3)>>
+      <<set _cesMaxLv = 45 - (_cesCount - 1) * 3>>
+      <<if _cesMaxLv < 35>><<set _cesMaxLv = 35>><</if>>
+      <<run _cesGroups.push({ lvMin:35, lvMax:_cesMaxLv, count:_cesCount })>>
+
+    <<case "S">>
+      <<set _cesCount = 1 + Math.floor(Math.random() * 3)>>
+      <<set _cesMaxLv = 60 - (_cesCount - 1) * 3>>
+      <<if _cesMaxLv < 45>><<set _cesMaxLv = 45>><</if>>
+      <<run _cesGroups.push({ lvMin:45, lvMax:_cesMaxLv, count:_cesCount })>>
+
+    <<case "EX">>
+      <<set _cesCount = 1 + Math.floor(Math.random() * 3)>>
+      <<set _cesMaxLv = 70 - (_cesCount - 1) * 2>>
+      <<if _cesMaxLv < 60>><<set _cesMaxLv = 60>><</if>>
+      <<run _cesGroups.push({ lvMin:60, lvMax:_cesMaxLv, count:_cesCount })>>
+
+  <</switch>>
+
+  <<set _commSpec = { tier:_cesTier, enemyGroups:_cesGroups }>>
+<</widget>>
+
+
+/* ===================================================================
+   地点选择
+   =================================================================== */
+
+/*
+  pickCommissionLocation：从LocationLibrary中选一个符合条件的地点。
+  条件：region匹配$CurrentRegion，且minTier不高于委托评级。
+  放 _pickedLocKey（字符串key）和 _pickedLoc（地点对象）。
+  无匹配地点时 _pickedLocKey = null。
+  _args[0]=委托评级字符串
+*/
+<<widget "pickCommissionLocation">>
+  <<set _pclTier = _args[0]>>
+  <<tierToNum _pclTier>><<set _pclTierNum = _tierNum>>
+
+  <<set _pclPool = []>>
+  <<set _pclKeys = Object.keys($LocationLibrary)>>
+  <<for _pclI = 0; _pclI < _pclKeys.length; _pclI++>>
+    <<set _pclLoc = $LocationLibrary[_pclKeys[_pclI]]>>
+    /* 匹配region */
+    <<if _pclLoc.region === $CurrentRegion>>
+      /* 匹配最低评级 */
+      <<tierToNum (_pclLoc.minTier || "D")>><<set _pclLocMin = _tierNum>>
+      <<if _pclTierNum >= _pclLocMin>>
+        <<run _pclPool.push(_pclKeys[_pclI])>>
+      <</if>>
+    <</if>>
+  <</for>>
+
+  <<if _pclPool.length > 0>>
+    <<set _pickedLocKey = _pclPool.random()>>
+    <<set _pickedLoc = $LocationLibrary[_pickedLocKey]>>
+  <<else>>
+    <<set _pickedLocKey = null>>
+    <<set _pickedLoc = null>>
+  <</if>>
+<</widget>>
+
+
+/* ===================================================================
+   生成单个委托
+   =================================================================== */
+
+/*
+  generateOneCommission：生成一个完整的委托数据对象，放 _commission。
+  _args[0]=玩家等级
+
+  委托对象结构：
+  {
+    tier,                    评级字符串
+    enemyGroups,             敌人规格数组
+    totalEnemies,            总敌人数
+    locationKey,             地点库key
+    locationName,            显示名
+    locationPassage,         地点passage名
+    typeTag,                 地形类型tag
+    terrainTags,             战斗地图生成tag
+    templateIndex,           选中的模板在同类型数组中的索引
+    description,             委托板描述文本
+    expReward,               经验奖励
+    goldReward,              金币奖励
+    repReward,               声望奖励
+    status                   "available"/"accepted"/"completed"
+  }
+*/
+<<widget "generateOneCommission">>
+    <<set _gocLv = _args[0]>>
+
+    /* 1. 抽评级 */
+    <<rollCommissionTier _gocLv>>
+    <<set _gocTier = _rolledTier>>
+
+    /* 1.5 尝试roll特殊委托 */
+    <<tryRollSpecialCommission _gocTier>>
+    <<if _rolledSpecial !== null>>
+        /* 命中特殊委托，用特殊委托构建 */
+        <<buildSpecialCommission _rolledSpecial>>
+        /* _commission已被buildSpecialCommission设好，直接返回 */
+    <<else>>
+
+
+        /* 2. 敌人规格 */
+        <<commissionEnemySpec _gocTier>>
+        <<set _gocSpec = _commSpec>>
+
+        /* 3. 从SpeciesLibrary收集可用category */
+        <<set _gocCats = []>>
+        <<set _gocSpKeys = Object.keys($SpeciesLibrary)>>
+        <<for _gocI = 0; _gocI < _gocSpKeys.length; _gocI++>>
+            <<set _gocSp = $SpeciesLibrary[_gocSpKeys[_gocI]]>>
+            <<set _gocCat = _gocSp.category || "monster">>
+            <<if _gocCats.indexOf(_gocCat) === -1>>
+            <<run _gocCats.push(_gocCat)>>
+            <</if>>
+        <</for>>
+        <<if _gocCats.length === 0>><<set _gocCats = ["monster"]>><</if>>
+
+        /* 4. 给每个enemyGroup分配category */
+        <<set _gocTotalEnemies = 0>>
+        <<for _gocG = 0; _gocG < _gocSpec.enemyGroups.length; _gocG++>>
+            <<set _gocSpec.enemyGroups[_gocG].categoryTag = _gocCats.random()>>
+            <<set _gocTotalEnemies += _gocSpec.enemyGroups[_gocG].count>>
+        <</for>>
+
+        /* 5. 选地点 */
+        <<pickCommissionLocation _gocTier>>
+        <<set _gocLocKey = _pickedLocKey>>
+        <<set _gocLoc = _pickedLoc>>
+
+        /* 地点信息（无匹配时用缺省） */
+        <<if _gocLoc>>
+            <<set _gocLocName = _gocLoc.displayName>>
+            <<set _gocLocPassage = _gocLoc.passage>>
+            <<set _gocTypeTag = _gocLoc.typeTag>>
+            <<set _gocTerrTags = _gocLoc.terrainTags || ["plain"]>>
+        <<else>>
+            <<set _gocLocName = "未知地点">>
+            <<set _gocLocPassage = "">>
+            <<set _gocTypeTag = "field">>
+            <<set _gocTerrTags = ["plain"]>>
+            <<set _gocLocKey = null>>
+        <</if>>
+
+        /* 6. 选模板（同typeTag的模板数组中随机一个索引） */
+        <<set _gocTplArr = $CommissionTemplateLibrary[_gocTypeTag]>>
+        <<set _gocTplIdx = 0>>
+        <<if _gocTplArr && _gocTplArr.length > 0>>
+            <<set _gocTplIdx = Math.floor(Math.random() * _gocTplArr.length)>>
+        <</if>>
+
+        /* 7. 描述文本 */
+        <<set _gocDesc = "">>
+        <<switch _gocTier>>
+            <<case "D">><<set _gocDesc = "在" + _gocLocName + "附近清除少量弱小魔物。">>
+            <<case "C">><<set _gocDesc = "前往" + _gocLocName + "讨伐在该处活动的中等威胁。">>
+            <<case "B">>
+            <<if _gocTotalEnemies >= 5>>
+                <<set _gocDesc = "在" + _gocLocName + "扫荡一群聚集的敌人。">>
+            <<else>>
+                <<set _gocDesc = "前往" + _gocLocName + "击败强敌。">>
+            <</if>>
+            <<case "A">><<set _gocDesc = "前往" + _gocLocName + "讨伐高危目标。">>
+            <<case "S">><<set _gocDesc = "极其危险的任务——在" + _gocLocName + "迎战强大的存在。">>
+            <<case "EX">><<set _gocDesc = "传说级威胁出现在" + _gocLocName + "——只有最强者才能生还。">>
+        <</switch>>
+
+        /* 8. 奖励 */
+        <<set _gocExpBase = { D:20, C:60, B:150, A:400, S:1000, EX:3000 }>>
+        <<set _gocGoldBase = { D:10, C:30, B:80, A:200, S:500, EX:1500 }>>
+        <<set _gocRepBase = { D:5, C:15, B:40, A:100, S:250, EX:800 }>>
+
+        <<set _gocExpReward = (_gocExpBase[_gocTier] || 20) * _gocTotalEnemies>>
+        <<set _gocGoldReward = (_gocGoldBase[_gocTier] || 10) * _gocTotalEnemies>>
+        <<set _gocRepReward = (_gocRepBase[_gocTier] || 5)>>
+
+        /* 9. 组装 */
+        <<set _commission = {
+            tier: _gocTier,
+            enemyGroups: _gocSpec.enemyGroups,
+            totalEnemies: _gocTotalEnemies,
+            locationKey: _gocLocKey,
+            locationName: _gocLocName,
+            locationPassage: _gocLocPassage,
+            typeTag: _gocTypeTag,
+            terrainTags: _gocTerrTags,
+            templateIndex: _gocTplIdx,
+            description: _gocDesc,
+            expReward: _gocExpReward,
+            goldReward: _gocGoldReward,
+            repReward: _gocRepReward,
+            status: "available"
+        }>>
+    <</if>>
+<</widget>>
+
+
+/* ===================================================================
+   刷新委托板
+   =================================================================== */
+
+<<widget "refreshCommissionBoard">>
+  <<set _rcbLv = _args[0]>>
+  <<for _rcbI = 0; _rcbI < 6; _rcbI++>>
+    <<generateOneCommission _rcbLv>>
+    <<set $CommissionBoard[_rcbI] = clone(_commission)>>
+  <</for>>
+<</widget>>
+
+
+<<widget "checkCommissionRefresh">>
+  <<set _ccrWeek = Math.floor($day / 7)>>
+  /* ★每次都检查特殊委托过期 */
+  <<checkSpecialCommissionExpiry>>
+  <<if _ccrWeek !== $CommissionLastRefreshWeek>>
+    <<refreshCommissionBoard _args[0]>>
+    <<set $CommissionLastRefreshWeek = _ccrWeek>>
+  <</if>>
+<</widget>>
+
+
+
+/* ===================================================================
+   生成委托战斗敌人
+   =================================================================== */
+
+<<widget "spawnCommissionEnemies">>
+  <<set _sceComm = _args[0]>>
+  <<set $PlaceholderEnemy = false>>
+  <<for _sceG = 0; _sceG < _sceComm.enemyGroups.length; _sceG++>>
+    <<set _sceGrp = _sceComm.enemyGroups[_sceG]>>
+    <<for _sceI = 0; _sceI < _sceGrp.count; _sceI++>>
+      <<set _sceTags = [ _sceGrp.categoryTag, { lvMin:_sceGrp.lvMin, lvMax:_sceGrp.lvMax } ]>>
+      <<generateEnemyFromTags _sceTags>>
+    <</for>>
+  <</for>>
+<</widget>>
+
+
+/* ===================================================================
+   声望系统
+   =================================================================== */
+
+/*
+  adventurerRankTable：声望→职称对照表。
+  按升序排列，从高往低匹配第一个<=当前声望的。
+*/
+<<widget "updateAdventurerRank">>
+  <<set _uarRanks = [
+    { threshold: 0,     title: "无名" },
+    { threshold: 20,    title: "新手冒险者" },
+    { threshold: 80,    title: "见习冒险者" },
+    { threshold: 200,   title: "正式冒险者" },
+    { threshold: 500,   title: "资深冒险者" },
+    { threshold: 1200,  title: "精英冒险者" },
+    { threshold: 3000,  title: "王牌冒险者" },
+    { threshold: 8000,  title: "传奇冒险者" },
+    { threshold: 20000, title: "冒险者之巅" }
+  ]>>
+
+  <<set $AdventurerRank = "无名">>
+  <<for _uar = _uarRanks.length - 1; _uar >= 0; _uar-->>
+    <<if $AdventurerRep >= _uarRanks[_uar].threshold>>
+      <<set $AdventurerRank = _uarRanks[_uar].title>>
+      <<break>>
+    <</if>>
+  <</for>>
+<</widget>>
+
+
+/*
+  nextRankThreshold：下一个职称需要的声望，放 _nextThreshold。
+  已到最高则返回当前值。
+*/
+<<widget "nextRankThreshold">>
+  <<set _nrtRanks = [0, 20, 80, 200, 500, 1200, 3000, 8000, 20000]>>
+  <<set _nextThreshold = _nrtRanks[_nrtRanks.length - 1]>>
+  <<for _nrt = 0; _nrt < _nrtRanks.length; _nrt++>>
+    <<if $AdventurerRep < _nrtRanks[_nrt]>>
+      <<set _nextThreshold = _nrtRanks[_nrt]>>
+      <<break>>
+    <</if>>
+  <</for>>
+<</widget>>
+
+
+/*
+  grantCommissionRewards：发放委托奖励。
+  _args[0]=委托对象
+*/
+<<widget "grantCommissionRewards">>
+  <<set _gcrComm = _args[0]>>
+
+  /* 经验给玩家 */
+  <<set $Player.exp += _gcrComm.expReward>>
+
+  /* 金币 */
+  <<set $Gold += _gcrComm.goldReward>>
+
+  /* 声望 */
+  <<set $AdventurerRep += _gcrComm.repReward>>
+  <<set $AdventurerCompletedCount += 1>>
+
+  /* 更新职称 */
+  <<updateAdventurerRank>>
+<</widget>>
+
+
+/*
+  startCommissionBattle：从委托数据发起战斗。
+  _args[0]=委托对象
+*/
+<<widget "startCommissionBattle">>
+  <<set _scbComm = _args[0]>>
+
+  /* 重置战斗状态 */
+  <<set $Units = []>>
+  <<clearLootOnBattleStart>>  
+  <<set $UnitIdCounter = 0>>
+  <<set $Field = { buff:[], triggers:[], tick:0, round:1, grid:null }>>
+  <<set $ActionLog = "">>
+  <<set $BattleTurnLog = "">>
+  <<set $ActiveActorId = "">>
+  <<set $PendingSpell = "">><<set $PendingFormation = "">><<set $PendingItem = "">><<set $PendingSkill = "">>
+  <<set $CastLevelChoice = 1>><<set $AttackHeavy = 0>>
+  <<set $BattleResult = { defeated:[], expGained:0 }>>
+  <<set $BattleExitReason = "">>
+  <<set $PlaceholderEnemy = false>>
+  <<set $CombatRules = { canFlee:true, lethalOverride:null }>>
+
+  /* 确保玩家有基础装备 */
+  <<if not $Player.weapon>>
+    <<set $Player.weapon = clone($WeaponLibrary.shortSword)>>
+  <</if>>
+  <<set $Player.RemainHP = $Player.maxHP>>
+  <<set $Player.RemainMP = $Player.maxMP>>
+  <<set $Player.status = "alive">>
+
+  /* 玩家入场 */
+  <<enlistUnit $Player "ally" true>>
+
+  /* 生成敌人 */
+  <<spawnCommissionEnemies _scbComm>>
+
+  /* 生成地图 */
+  <<generateGrid _scbComm.terrainTags>>
+  <<placeUnitsOnGrid>>
+
+  /* 设置跳转 */
+  <<set $BattleWin = "Commission Battle Win">>
+  <<set $BattleLose = "Commission Battle Lose">>
+  <<set $BattleFlee = "Commission Battle Flee">>
+
+    /* bonus先手 */
+  <<if $CommissionBonusBuff>>
+    <<set _scbPlayer = $Units.find(function(u){ return u.isPlayer; })>>
+    <<if _scbPlayer>>
+      <<set _scbPlayer.gauge += 50>>
+    <</if>>
+    <<set $CommissionBonusBuff = false>>
+  <</if>>
+
+  <<goto "Battle">>
+
+<</widget>>
+
+
+/*
+  hasCommissionHere：检查当前passage是否有对应的已接取委托。
+  放 _hasCommHere（布尔）。通过比较委托的locationPassage和当前passage名。
+*/
+<<widget "hasCommissionHere">>
+  <<set _hasCommHere = false>>
+  <<set _commIsSpecialPassage = false>>
+    <<if $ActiveCommission !== -1 && $CommissionBoard[$ActiveCommission]>>
+        <<set _hchComm = $CommissionBoard[$ActiveCommission]>>
+        <<if _hchComm.status === "accepted">>
+            /* 普通委托：匹配locationPassage */
+            <<if _hchComm.locationPassage === passage()>>
+                <<set _hasCommHere = true>>
+            <</if>>
+            /* 特殊委托还可以匹配specialPassage（虽然通常特殊passage是直接goto的） */
+            <<if _hchComm.specialPassage && _hchComm.specialPassage === passage()>>
+                <<set _hasCommHere = true>>
+                <<set _commIsSpecialPassage = true>>
+            <</if>>
+        <</if>>
+    <</if>>
+<</widget>>
+
+
+
+/* ===================================================================
+   特殊委托系统
+   =================================================================== */
+
+/*
+  checkSpecialCommissionExpiry：检查所有特殊委托的时限。
+  过期的标记expired=true，如果有followUpId则激活替代委托。
+  在checkCommissionRefresh里调用（每次刷新时顺便检查）。
+*/
+<<widget "checkSpecialCommissionExpiry">>
+  <<set _csceKeys = Object.keys($SpecialCommissionLibrary)>>
+  <<for _csce = 0; _csce < _csceKeys.length; _csce++>>
+    <<set _csceS = $SpecialCommissionLibrary[_csceKeys[_csce]]>>
+    <<if _csceS.hasDeadline && not _csceS.expired && not _csceS.completed>>
+      <<if _csceS.firstSeenDay >= 0>>
+        /* 已经被刷新出来过，检查是否过期 */
+        <<if $day - _csceS.firstSeenDay >= _csceS.deadlineDays>>
+          <<set _csceS.expired = true>>
+          /* 如果有替代委托，激活它 */
+          <<if _csceS.followUpId && $SpecialCommissionLibrary[_csceS.followUpId]>>
+            <<set _csceFollow = $SpecialCommissionLibrary[_csceS.followUpId]>>
+            /* 只在替代委托还没过期、没完成时激活 */
+            <<if not _csceFollow.expired && not _csceFollow.completed>>
+              <<set _csceFollow.firstSeenDay = $day>>
+            <</if>>
+          <</if>>
+
+          /* 如果委托板上有这个已过期的委托，移除它 */
+          <<for _csceB = 0; _csceB < $CommissionBoard.length; _csceB++>>
+            <<if $CommissionBoard[_csceB] && $CommissionBoard[_csceB].isSpecial && $CommissionBoard[_csceB].specialId === _csceKeys[_csce]>>
+              /* 如果玩家接取了这个委托，也要取消 */
+              <<if $ActiveCommission === _csceB>>
+                <<set $ActiveCommission = -1>>
+              <</if>>
+              <<set $CommissionBoard[_csceB].status = "expired">>
+            <</if>>
+          <</for>>
+        <</if>>
+      <</if>>
+    <</if>>
+  <</for>>
+<</widget>>
+
+
+/*
+  tryRollSpecialCommission：尝试为某个评级roll一个特殊委托。
+  20%概率触发。如果触发，从符合条件的特殊委托池中随机选一个。
+
+  条件：
+    - 同评级
+    - 同地区（$CurrentRegion）
+    - 未完成（或可重复）
+    - 未过期
+    - 当前委托板上没有同一个特殊委托
+
+  放 _rolledSpecial（特殊委托对象或null）。
+  _args[0]=评级字符串
+*/
+<<widget "tryRollSpecialCommission">>
+  <<set _trsSpecTier = _args[0]>>
+  <<set _rolledSpecial = null>>
+
+  /* 20%概率 */
+  <<if Math.random() < 0.2>>
+    /* 收集符合条件的特殊委托 */
+    <<set _trsPool = []>>
+    <<set _trsKeys = Object.keys($SpecialCommissionLibrary)>>
+    <<for _trs = 0; _trs < _trsKeys.length; _trs++>>
+      <<set _trsS = $SpecialCommissionLibrary[_trsKeys[_trs]]>>
+
+      /* 条件检查 */
+      <<set _trsOK = true>>
+
+      /* 评级匹配 */
+      <<if _trsS.tier !== _trsSpecTier>><<set _trsOK = false>><</if>>
+
+      /* 地区匹配 */
+      <<if _trsS.region !== $CurrentRegion>><<set _trsOK = false>><</if>>
+
+      /* 未完成（或可重复） */
+      <<if _trsS.completed && not _trsS.repeatable>><<set _trsOK = false>><</if>>
+
+      /* 未过期 */
+      <<if _trsS.expired>><<set _trsOK = false>><</if>>
+
+      /* 有时限但还没被看到过（firstSeenDay===-1）的可以出现 */
+      /* 有时限且已被看到过且已过期的在上面expired检查中已排除 */
+
+      /* 委托板上没有同一个 */
+      <<if _trsOK>>
+        <<for _trsB = 0; _trsB < $CommissionBoard.length; _trsB++>>
+          <<if $CommissionBoard[_trsB] && $CommissionBoard[_trsB].isSpecial && $CommissionBoard[_trsB].specialId === _trsKeys[_trs]>>
+            <<set _trsOK = false>><<break>>
+          <</if>>
+        <</for>>
+      <</if>>
+
+      <<if _trsOK>>
+        <<run _trsPool.push(_trsKeys[_trs])>>
+      <</if>>
+    <</for>>
+
+    /* 从池中随机选一个 */
+    <<if _trsPool.length > 0>>
+      <<set _trsPickKey = _trsPool.random()>>
+      <<set _rolledSpecial = $SpecialCommissionLibrary[_trsPickKey]>>
+
+      /* 记录首次看到的日期（用于时限计算） */
+      <<if _rolledSpecial.firstSeenDay < 0>>
+        <<set _rolledSpecial.firstSeenDay = $day>>
+      <</if>>
+    <</if>>
+  <</if>>
+<</widget>>
+
+
+/*
+  buildSpecialCommission：把特殊委托蓝图转成委托板条目格式。
+  放 _commission（和普通委托相同结构，额外有isSpecial/specialId字段）。
+  _args[0]=特殊委托蓝图对象
+*/
+<<widget "buildSpecialCommission">>
+  <<set _bscS = _args[0]>>
+
+  /* 地点信息 */
+  <<set _bscLocName = "未知地点">>
+  <<set _bscLocPassage = "">>
+  <<set _bscTypeTag = "field">>
+  <<set _bscTerrTags = ["plain"]>>
+
+  <<if _bscS.locationKey && $LocationLibrary[_bscS.locationKey]>>
+    <<set _bscLoc = $LocationLibrary[_bscS.locationKey]>>
+    <<set _bscLocName = _bscLoc.displayName>>
+    /* locationPassage 始终用地点库的passage（玩家实际到达的地方） */
+    <<set _bscLocPassage = _bscLoc.passage>>
+
+    <<set _bscTypeTag = _bscLoc.typeTag>>
+    <<set _bscTerrTags = _bscLoc.terrainTags || ["plain"]>>
+  <</if>>
+
+  /* 如果特殊委托有自己的battleConfig，就不需要enemyGroups了 */
+  <<set _bscEnemyGroups = []>>
+  <<set _bscTotalEnemies = 0>>
+  <<if not _bscS.battleConfig>>
+    /* 没有自定义战斗：按tier生成随机敌人规格 */
+    <<commissionEnemySpec _bscS.tier>>
+    <<set _bscEnemyGroups = _commSpec.enemyGroups>>
+    /* 给每组分配category */
+    <<set _bscCats = []>>
+    <<set _bscSpKeys = Object.keys($SpeciesLibrary)>>
+    <<for _bsc = 0; _bsc < _bscSpKeys.length; _bsc++>>
+      <<set _bscCat = $SpeciesLibrary[_bscSpKeys[_bsc]].category || "monster">>
+      <<if _bscCats.indexOf(_bscCat) === -1>><<run _bscCats.push(_bscCat)>><</if>>
+    <</for>>
+    <<if _bscCats.length === 0>><<set _bscCats = ["monster"]>><</if>>
+    <<for _bsc = 0; _bsc < _bscEnemyGroups.length; _bsc++>>
+      <<set _bscEnemyGroups[_bsc].categoryTag = _bscCats.random()>>
+      <<set _bscTotalEnemies += _bscEnemyGroups[_bsc].count>>
+    <</for>>
+  <<else>>
+    /* 有自定义战斗：从battleConfig.enemies计数 */
+    <<if _bscS.battleConfig.enemies>>
+      <<set _bscTotalEnemies = _bscS.battleConfig.enemies.length>>
+    <</if>>
+  <</if>>
+
+  /* 时限信息 */
+  <<set _bscDeadlineText = "">>
+  <<if _bscS.hasDeadline && _bscS.firstSeenDay >= 0>>
+    <<set _bscDaysLeft = _bscS.deadlineDays - ($day - _bscS.firstSeenDay)>>
+    <<if _bscDaysLeft > 0>>
+      <<set _bscDeadlineText = "（剩余" + _bscDaysLeft + "天）">>
+    <</if>>
+  <</if>>
+
+  <<set _commission = {
+    tier: _bscS.tier,
+    enemyGroups: _bscEnemyGroups,
+    totalEnemies: _bscTotalEnemies,
+    locationKey: _bscS.locationKey || null,
+    locationName: _bscLocName,
+    locationPassage: _bscLocPassage,
+    typeTag: _bscTypeTag,
+    terrainTags: _bscTerrTags,
+    templateIndex: 0,
+    description: "★ " + _bscS.description + " " + _bscDeadlineText,
+    expReward: _bscS.expReward,
+    goldReward: _bscS.goldReward,
+    repReward: _bscS.repReward,
+    status: "available",
+
+    /* 特殊委托标记 */
+    isSpecial: true,
+    specialId: _bscS.id,
+    specialPassage: _bscS.passage || null,
+    specialBattleConfig: _bscS.battleConfig ? clone(_bscS.battleConfig) : null,
+    specialLoot: _bscS.loot ? clone(_bscS.loot) : []
+  }>>
+<</widget>>
+
+
+/*
+  startSpecialCommissionBattle：从当前接取的特殊委托发起战斗。
+  如果特殊委托有battleConfig，用startCombat；否则用startCommissionBattle。
+  调用前需确保$ActiveCommission指向一个特殊委托。
+*/
+<<widget "startSpecialCommissionBattle">>
+  <<set _sscbComm = $CommissionBoard[$ActiveCommission]>>
+
+  <<if _sscbComm.specialBattleConfig>>
+    /* 用自定义战斗配置 */
+    <<set _sscbCfg = clone(_sscbComm.specialBattleConfig)>>
+
+    /* 设置跳转（覆盖配置里的，统一用委托的） */
+    <<set _sscbCfg.onWin = "Commission Battle Win">>
+    <<set _sscbCfg.onLose = "Commission Battle Lose">>
+    <<set _sscbCfg.onFlee = "Commission Battle Flee">>
+
+    /* bonus先手 */
+    <<set $CommissionPendingBonus = $CommissionBonusBuff || false>>
+    <<set $CommissionBonusBuff = false>>
+
+    <<startCombat _sscbCfg>>
+    /* startCombat会goto Battle，下面不会执行 */
+
+  <<else>>
+    /* 没有自定义配置，走普通流程 */
+    <<startCommissionBattle _sscbComm>>
+  <</if>>
+<</widget>>

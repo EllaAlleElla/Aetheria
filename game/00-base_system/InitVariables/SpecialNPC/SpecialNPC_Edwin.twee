@@ -5,6 +5,11 @@
 /*数据*/
 <<set $EdwinLove = 0>>/* 艾德温好感 */
 
+
+
+
+
+
 /*状态*/
 <<set $EdwinSpecialAttitude = []>>/* 艾德温对玩家的特殊态度 */
 <<set $EdwinSpecialStatus = []>>/* 艾德温的特殊状态 */
@@ -37,3 +42,19 @@
     weapon: null,
     status: "alive"
 }>>
+
+/* 补充刚刚留空的法术栏和法阵栏 */
+
+/* 会所有法术 */
+<<set $PersistNPC.Edwin.spell = Object.keys($SpellLibrary)>>
+
+/* 会所有法阵 */
+<<set $PersistNPC.Edwin.formation = Object.keys($FormationLibrary)>>
+
+
+
+<<set $PersistNPC.Edwin.crafts = {}>>
+<<set $PersistNPC.Edwin.craftAbilities = []>>
+<<set $PersistNPC.Edwin.craftRecipes = []>>
+<<set $PersistNPC.Edwin.jobTags = ["施法者","炼金术师","战术家","学者","博物学家","吟游诗人","治疗师","厨师","剑士","弓手"]>>
+<<set $PersistNPC.Edwin.craftBonuses = {}>>

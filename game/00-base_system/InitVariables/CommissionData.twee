@@ -1,0 +1,38 @@
+:: Commission Data
+
+/* 委托板：固定6个槽位 */
+<<set $CommissionBoard = [null, null, null, null, null, null]>>
+
+/* 上次刷新的周数 */
+<<set $CommissionLastRefreshWeek = -1>>
+
+/* 当前接取的委托索引（-1表示未接取） */
+<<set $ActiveCommission = -1>>
+
+/* 当前所在大地区（在地区入口passage里设置） */
+<<set $CurrentRegion = "">>
+
+/* ===== 冒险者声望系统 ===== */
+<<set $AdventurerRep = 0>>           /* 声望点数 */
+<<set $AdventurerRank = "无名">>      /* 当前职称 */
+<<set $AdventurerCompletedCount = 0>> /* 累计完成委托数 */
+
+/* 金币（如果你还没有金币系统的话） */
+<<if $Gold === undefined>><<set $Gold = 0>><</if>>
+
+/* 
+在地点passage里加上这些代码来允许它显示委托连接
+
+<<hasCommissionHere>>
+<<if _hasCommHere>>
+  <hr>
+  <span style="color:#ff0">你的委托目标就在这附近。</span><br>
+  <<link "执行委托">><<goto "Commission Execute">><</link>>
+<</if>>
+ */
+
+<<set $CommissionStep = 0>>              /* 委托模板当前步骤 */
+<<set $CommissionPreFightText = "">>     /* 战斗前文本 */
+<<set $CommissionBonusBuff = false>>     /* 是否有先手bonus */
+
+<<set $CommissionPendingBonus = false>>

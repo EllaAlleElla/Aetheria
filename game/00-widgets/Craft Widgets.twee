@@ -1,0 +1,486 @@
+:: Craft Widgets [widget nobr]
+
+/*
+  getCraftLevel：获取某角色某技艺的当前等级。放 _craftLevel。
+  _args[0]=角色对象（$Player或$PersistNPC[x]）
+  _args[1]=技艺key（如"alchemy"）
+
+  没练过该技艺则返回0。
+*/
+<<widget "getCraftLevel">>
+  <<set _gclChar = _args[0]>>
+  <<set _gclKey = _args[1]>>
+  <<if _gclChar.crafts && _gclChar.crafts[_gclKey]>>
+    <<set _craftLevel = _gclChar.crafts[_gclKey].level>>
+  <<else>>
+    <<set _craftLevel = 0>>
+  <</if>>
+<</widget>>
+
+
+/*
+  craftExpNeeded：计算某技艺从当前等级升到下一级需要多少经验。放 _craftExpNeed。
+  _args[0]=技艺key _args[1]=当前等级
+
+  公式：base × growth^(level-1)。level 0→1 需要 base 经验。
+*/
+<<widget "craftExpNeeded">>
+  <<set _cenKey = _args[0]>>
+  <<set _cenLv = _args[1]>>
+  <<set _cenDef = $CraftLibrary[_cenKey]>>
+  <<if _cenDef>>
+    <<set _craftExpNeed = Math.round(_cenDef.expCurve.base * Math.pow(_cenDef.expCurve.growth, _cenLv))>>
+  <<else>>
+    <<set _craftExpNeed = 9999>>
+  <</if>>
+<</widget>>
+
+
+/*
+  gainCraftExp：给角色的某技艺增加经验，自动处理升级和解锁。
+  _args[0]=角色对象
+  _args[1]=技艺key
+  _args[2]=经验量（正数）
+
+  这是技艺系统的核心——所有"练技艺"的操作最终都调用它。
+  结果放 _craftGainResult = { levelsGained:数字, newUnlocks:数组 }
+*/
+<<widget "gainCraftExp">>
+  <<set _gceChar = _args[0]>>
+  <<set _gceKey = _args[1]>>
+  <<set _gceAmt = _args[2]>>
+
+  /* 确保角色有crafts对象和相关数组 */
+  <<if not _gceChar.crafts>><<set _gceChar.crafts = {}>><</if>>
+  <<if not _gceChar.craftAbilities>><<set _gceChar.craftAbilities = []>><</if>>
+  <<if not _gceChar.craftRecipes>><<set _gceChar.craftRecipes = []>><</if>>
+  <<if not _gceChar.jobTags>><<set _gceChar.jobTags = []>><</if>>
+  <<if not _gceChar.craftBonuses>><<set _gceChar.craftBonuses = {}>><</if>>
+
+  /* 如果该技艺还没练过，初始化 */
+  <<if not _gceChar.crafts[_gceKey]>>
+    <<set _gceChar.crafts[_gceKey] = { level:0, exp:0 }>>
+  <</if>>
+
+  <<set _gceCraft = _gceChar.crafts[_gceKey]>>
+  <<set _gceCraft.exp += _gceAmt>>
+
+  <<set _gceLevelsGained = 0>>
+  <<set _gceNewUnlocks = []>>
+
+  /* 循环检查升级 */
+  <<for _gceGuard = 0; _gceGuard < 100; _gceGuard++>>
+    <<craftExpNeeded _gceKey _gceCraft.level>>
+    <<if _gceCraft.exp >= _craftExpNeed>>
+      <<set _gceCraft.exp -= _craftExpNeed>>
+      <<set _gceCraft.level += 1>>
+      <<set _gceLevelsGained += 1>>
+
+      /* 检查这个等级是否有解锁 */
+      <<set _gceDef = $CraftLibrary[_gceKey]>>
+      <<if _gceDef && _gceDef.unlocks>>
+        <<for _gceU = 0; _gceU < _gceDef.unlocks.length; _gceU++>>
+          <<set _gceUnlock = _gceDef.unlocks[_gceU]>>
+          <<if _gceUnlock.level === _gceCraft.level>>
+            /* 执行解锁 */
+            <<applyCraftUnlock _gceChar _gceUnlock>>
+            <<run _gceNewUnlocks.push(_gceUnlock)>>
+          <</if>>
+        <</for>>
+      <</if>>
+    <<else>>
+      <<break>>
+    <</if>>
+  <</for>>
+
+  <<set _craftGainResult = { levelsGained:_gceLevelsGained, newUnlocks:_gceNewUnlocks }>>
+<</widget>>
+
+
+/*
+  applyCraftUnlock：执行一个技艺解锁条目。
+  _args[0]=角色对象 _args[1]=解锁条目
+
+  根据type分别处理：
+    skill     → 加入角色的skill数组
+    recipe    → 加入角色的craftRecipes数组
+    ability   → 加入角色的craftAbilities数组
+    statBonus → 累加到角色的craftBonuses对象
+    tag       → 加入角色的jobTags数组
+*/
+<<widget "applyCraftUnlock">>
+  <<set _acuChar = _args[0]>>
+  <<set _acuUnlock = _args[1]>>
+
+  <<switch _acuUnlock.type>>
+
+    <<case "skill">>
+      <<if not _acuChar.skill>><<set _acuChar.skill = []>><</if>>
+      <<if _acuChar.skill.indexOf(_acuUnlock.ref) === -1>>
+        <<run _acuChar.skill.push(_acuUnlock.ref)>>
+      <</if>>
+
+    <<case "recipe">>
+      <<if _acuChar.craftRecipes.indexOf(_acuUnlock.ref) === -1>>
+        <<run _acuChar.craftRecipes.push(_acuUnlock.ref)>>
+      <</if>>
+
+    <<case "ability">>
+      <<if _acuChar.craftAbilities.indexOf(_acuUnlock.ref) === -1>>
+        <<run _acuChar.craftAbilities.push(_acuUnlock.ref)>>
+      <</if>>
+
+    <<case "statBonus">>
+      <<set _acuKey = _acuUnlock.ref>>
+      <<set _acuVal = _acuUnlock.value || 0>>
+      <<if _acuChar.craftBonuses[_acuKey] === undefined>>
+        <<set _acuChar.craftBonuses[_acuKey] = 0>>
+      <</if>>
+      <<set _acuChar.craftBonuses[_acuKey] += _acuVal>>
+
+    <<case "tag">>
+      <<if _acuChar.jobTags.indexOf(_acuUnlock.ref) === -1>>
+        <<run _acuChar.jobTags.push(_acuUnlock.ref)>>
+      <</if>>
+
+  <</switch>>
+<</widget>>
+
+
+/*
+  syncCraftUnlocks：重新扫描角色所有技艺，确保所有该解锁的都已解锁。
+  用于加载存档后或手动修改等级后的同步。
+  _args[0]=角色对象
+*/
+<<widget "syncCraftUnlocks">>
+  <<set _scuChar = _args[0]>>
+  <<if not _scuChar.crafts>><<set _scuChar.crafts = {}>><</if>>
+  <<if not _scuChar.craftAbilities>><<set _scuChar.craftAbilities = []>><</if>>
+  <<if not _scuChar.craftRecipes>><<set _scuChar.craftRecipes = []>><</if>>
+  <<if not _scuChar.jobTags>><<set _scuChar.jobTags = []>><</if>>
+  <<if not _scuChar.craftBonuses>><<set _scuChar.craftBonuses = {}>><</if>>
+
+  /* 清空bonuses重算（因为bonuses是累加的，重复调用会叠加） */
+  <<set _scuChar.craftBonuses = {}>>
+
+  <<set _scuKeys = Object.keys(_scuChar.crafts)>>
+  <<for _scu = 0; _scu < _scuKeys.length; _scu++>>
+    <<set _scuKey = _scuKeys[_scu]>>
+    <<set _scuLv = _scuChar.crafts[_scuKey].level>>
+    <<set _scuDef = $CraftLibrary[_scuKey]>>
+    <<if _scuDef && _scuDef.unlocks>>
+      <<for _scuU = 0; _scuU < _scuDef.unlocks.length; _scuU++>>
+        <<set _scuUnlock = _scuDef.unlocks[_scuU]>>
+        <<if _scuUnlock.level <= _scuLv>>
+          <<applyCraftUnlock _scuChar _scuUnlock>>
+        <</if>>
+      <</for>>
+    <</if>>
+  <</for>>
+<</widget>>
+
+
+/*
+  hasAbility：检查角色是否已解锁某能力。放 _hasAbility。
+  _args[0]=角色对象 _args[1]=能力ref字符串
+*/
+<<widget "hasAbility">>
+  <<set _haChar = _args[0]>>
+  <<set _hasAbility = false>>
+  <<if _haChar.craftAbilities && _haChar.craftAbilities.indexOf(_args[1]) !== -1>>
+    <<set _hasAbility = true>>
+  <</if>>
+<</widget>>
+
+
+/*
+  hasRecipe：检查角色是否已解锁某配方。放 _hasRecipe。
+  _args[0]=角色对象 _args[1]=配方ref字符串
+*/
+<<widget "hasRecipe">>
+  <<set _hrChar = _args[0]>>
+  <<set _hasRecipe = false>>
+  <<if _hrChar.craftRecipes && _hrChar.craftRecipes.indexOf(_args[1]) !== -1>>
+    <<set _hasRecipe = true>>
+  <</if>>
+<</widget>>
+
+
+/*
+  hasJobTag：检查角色是否拥有某职业tag。放 _hasJobTag。
+  _args[0]=角色对象 _args[1]=tag字符串
+*/
+<<widget "hasJobTag">>
+  <<set _hjtChar = _args[0]>>
+  <<set _hasJobTag = false>>
+  <<if _hjtChar.jobTags && _hjtChar.jobTags.indexOf(_args[1]) !== -1>>
+    <<set _hasJobTag = true>>
+  <</if>>
+<</widget>>
+
+
+/*
+  totalCraftBonus：获取角色某属性的技艺被动加值总量。放 _craftBonus。
+  _args[0]=角色对象 _args[1]=属性名
+*/
+<<widget "totalCraftBonus">>
+  <<set _tcbChar = _args[0]>>
+  <<set _craftBonus = 0>>
+  <<if _tcbChar.craftBonuses && _tcbChar.craftBonuses[_args[1]] !== undefined>>
+    <<set _craftBonus = _tcbChar.craftBonuses[_args[1]]>>
+  <</if>>
+<</widget>>
+
+
+/*
+  checkAutoJobTags：检查角色是否满足自动获取职业tag的条件。
+  在角色数据发生变化时调用（比如学会新法术后）。
+  _args[0]=角色对象
+*/
+<<widget "checkAutoJobTags">>
+  <<set _cajtChar = _args[0]>>
+  <<if not _cajtChar.jobTags>><<set _cajtChar.jobTags = []>><</if>>
+
+  /* 施法者：拥有至少1个法术或法阵 */
+  <<if (_cajtChar.spell && _cajtChar.spell.length > 0) || (_cajtChar.formation && _cajtChar.formation.length > 0)>>
+    <<if _cajtChar.jobTags.indexOf("施法者") === -1>>
+      <<run _cajtChar.jobTags.push("施法者")>>
+    <</if>>
+  <</if>>
+
+  /* 剑士：拥有至少1个近战武器类skill且有非空手武器 */
+  <<if _cajtChar.skill && _cajtChar.skill.length > 0 && _cajtChar.weapon && _cajtChar.weapon.wtype !== "unarmed">>
+    <<set _cajtHasMelee = false>>
+    <<for _cajt = 0; _cajt < _cajtChar.skill.length; _cajt++>>
+      <<set _cajtSk = $SkillLibrary[_cajtChar.skill[_cajt]]>>
+      <<if _cajtSk && _cajtSk.requireWeapon>>
+        <<set _cajtHasMelee = true>><<break>>
+      <</if>>
+    <</for>>
+    <<if _cajtHasMelee && _cajtChar.jobTags.indexOf("剑士") === -1>>
+      <<run _cajtChar.jobTags.push("剑士")>>
+    <</if>>
+  <</if>>
+
+  /* 弓手：持有bow类武器 */
+  <<if _cajtChar.weapon && _cajtChar.weapon.wtype === "bow">>
+    <<if _cajtChar.jobTags.indexOf("弓手") === -1>>
+      <<run _cajtChar.jobTags.push("弓手")>>
+    <</if>>
+  <</if>>
+<</widget>>
+
+
+/* ===================================================================
+   职业tag → 随机装备/能力（用于敌人生成）
+   =================================================================== */
+
+/*
+  getTagsOfCategory：从$JobTagLibrary中获取某category的所有tag名数组。放 _catTags。
+  _args[0]=category字符串
+*/
+<<widget "getTagsOfCategory">>
+  <<set _gtcCat = _args[0]>>
+  <<set _catTags = []>>
+  <<set _gtcKeys = Object.keys($JobTagLibrary)>>
+  <<for _gtc = 0; _gtc < _gtcKeys.length; _gtc++>>
+    <<if $JobTagLibrary[_gtcKeys[_gtc]].category === _gtcCat>>
+      <<run _catTags.push(_gtcKeys[_gtc])>>
+    <</if>>
+  <</for>>
+<</widget>>
+
+
+/*
+  rollSceneJobTags：根据场景tag为一个单位roll职业tag。放 _rolledJobTags（字符串数组）。
+  _args[0]=场景tag字符串（如"野外"/"集市"）
+
+  如果该场景tag在$SceneJobTagRules中不存在，返回空数组。
+*/
+<<widget "rollSceneJobTags">>
+  <<set _rsjScene = _args[0]>>
+  <<set _rolledJobTags = []>>
+
+  <<set _rsjRule = $SceneJobTagRules[_rsjScene]>>
+  <<if _rsjRule>>
+    /* required：每个类别必选一个 */
+    <<if _rsjRule.required>>
+      <<for _rsj = 0; _rsj < _rsjRule.required.length; _rsj++>>
+        <<getTagsOfCategory _rsjRule.required[_rsj]>>
+        <<if _catTags.length > 0>>
+          <<set _rsjPick = _catTags.random()>>
+          <<if _rolledJobTags.indexOf(_rsjPick) === -1>>
+            <<run _rolledJobTags.push(_rsjPick)>>
+          <</if>>
+        <</if>>
+      <</for>>
+    <</if>>
+
+    /* optional：按概率额外选 */
+    <<if _rsjRule.optional>>
+      <<for _rsj = 0; _rsj < _rsjRule.optional.length; _rsj++>>
+        <<set _rsjOpt = _rsjRule.optional[_rsj]>>
+        <<if Math.random() < _rsjOpt.chance>>
+          <<getTagsOfCategory _rsjOpt.category>>
+          <<if _catTags.length > 0>>
+            <<set _rsjPick = _catTags.random()>>
+            <<if _rolledJobTags.indexOf(_rsjPick) === -1>>
+              <<run _rolledJobTags.push(_rsjPick)>>
+            <</if>>
+          <</if>>
+        <</if>>
+      <</for>>
+    <</if>>
+
+    /* specificTags：直接附加 */
+    <<if _rsjRule.specificTags>>
+      <<for _rsj = 0; _rsj < _rsjRule.specificTags.length; _rsj++>>
+        <<if _rolledJobTags.indexOf(_rsjRule.specificTags[_rsj]) === -1>>
+          <<run _rolledJobTags.push(_rsjRule.specificTags[_rsj])>>
+        <</if>>
+      <</for>>
+    <</if>>
+  <</if>>
+<</widget>>
+
+
+/*
+  applyJobTagsToUnit：把一组职业tag的内容应用到一个已生成的战斗单位上。
+  从每个tag的pool中随机选取法术/技能/武器/道具，叠加statMod。
+  _args[0]=单位（已在$Units中的） _args[1]=职业tag数组
+*/
+<<widget "applyJobTagsToUnit">>
+  <<set _ajtuUnit = _args[0]>>
+  <<set _ajtuTags = _args[1]>>
+
+  <<for _ajtu = 0; _ajtu < _ajtuTags.length; _ajtu++>>
+    <<set _ajtuTag = _ajtuTags[_ajtu]>>
+    <<set _ajtuDef = $JobTagLibrary[_ajtuTag]>>
+    <<if _ajtuDef>>
+
+      /* --- 法术 --- */
+      <<if _ajtuDef.spellPool && _ajtuDef.spellPool.length > 0>>
+        <<set _ajtuSC = _ajtuDef.spellCount || { min:1, max:2 }>>
+        <<set _ajtuSN = _ajtuSC.min + Math.floor(Math.random() * (_ajtuSC.max - _ajtuSC.min + 1))>>
+        <<set _ajtuShuf = _ajtuDef.spellPool.slice().sort(function(){return Math.random()-0.5;})>>
+        <<for _ajtuS = 0; _ajtuS < _ajtuSN && _ajtuS < _ajtuShuf.length; _ajtuS++>>
+          <<if _ajtuUnit.spell.indexOf(_ajtuShuf[_ajtuS]) === -1>>
+            <<run _ajtuUnit.spell.push(_ajtuShuf[_ajtuS])>>
+          <</if>>
+        <</for>>
+      <</if>>
+
+      /* --- 法阵 --- */
+      <<if _ajtuDef.formationPool && _ajtuDef.formationPool.length > 0>>
+        <<set _ajtuFC = _ajtuDef.formationCount || { min:0, max:1 }>>
+        <<set _ajtuFN = _ajtuFC.min + Math.floor(Math.random() * (_ajtuFC.max - _ajtuFC.min + 1))>>
+        <<set _ajtuFShuf = _ajtuDef.formationPool.slice().sort(function(){return Math.random()-0.5;})>>
+        <<if not _ajtuUnit.formation>><<set _ajtuUnit.formation = []>><</if>>
+        <<for _ajtuF = 0; _ajtuF < _ajtuFN && _ajtuF < _ajtuFShuf.length; _ajtuF++>>
+          <<if _ajtuUnit.formation.indexOf(_ajtuFShuf[_ajtuF]) === -1>>
+            <<run _ajtuUnit.formation.push(_ajtuFShuf[_ajtuF])>>
+          <</if>>
+        <</for>>
+      <</if>>
+
+      /* --- 技能 --- */
+      <<if _ajtuDef.skillPool && _ajtuDef.skillPool.length > 0>>
+        <<set _ajtuKC = _ajtuDef.skillCount || { min:0, max:2 }>>
+        <<set _ajtuKN = _ajtuKC.min + Math.floor(Math.random() * (_ajtuKC.max - _ajtuKC.min + 1))>>
+        <<set _ajtuKShuf = _ajtuDef.skillPool.slice().sort(function(){return Math.random()-0.5;})>>
+        <<if not _ajtuUnit.skill>><<set _ajtuUnit.skill = []>><</if>>
+        <<for _ajtuK = 0; _ajtuK < _ajtuKN && _ajtuK < _ajtuKShuf.length; _ajtuK++>>
+          <<if _ajtuUnit.skill.indexOf(_ajtuKShuf[_ajtuK]) === -1>>
+            <<run _ajtuUnit.skill.push(_ajtuKShuf[_ajtuK])>>
+          <</if>>
+        <</for>>
+      <</if>>
+
+      /* --- 武器（选一个替换当前） --- */
+      <<if _ajtuDef.weaponPool && _ajtuDef.weaponPool.length > 0>>
+        <<set _ajtuWKey = _ajtuDef.weaponPool.random()>>
+        <<if $WeaponLibrary[_ajtuWKey]>>
+          <<set _ajtuUnit.weapon = clone($WeaponLibrary[_ajtuWKey])>>
+        <</if>>
+      <</if>>
+
+      /* --- 道具 --- */
+      <<if _ajtuDef.itemPool && _ajtuDef.itemPool.length > 0>>
+        <<if not _ajtuUnit.items>><<set _ajtuUnit.items = []>><</if>>
+        <<for _ajtuI = 0; _ajtuI < _ajtuDef.itemPool.length; _ajtuI++>>
+          <<set _ajtuIP = _ajtuDef.itemPool[_ajtuI]>>
+          <<if Math.random() < _ajtuIP.chance>>
+            <<set _ajtuIC = _ajtuIP.countMin + Math.floor(Math.random() * (_ajtuIP.countMax - _ajtuIP.countMin + 1))>>
+            /* 合并到现有items */
+            <<set _ajtuFound = false>>
+            <<for _ajtuJ = 0; _ajtuJ < _ajtuUnit.items.length; _ajtuJ++>>
+              <<if _ajtuUnit.items[_ajtuJ].id === _ajtuIP.id>>
+                <<set _ajtuUnit.items[_ajtuJ].count += _ajtuIC>>
+                <<set _ajtuFound = true>><<break>>
+              <</if>>
+            <</for>>
+            <<if not _ajtuFound>>
+              <<run _ajtuUnit.items.push({ id:_ajtuIP.id, count:_ajtuIC })>>
+            <</if>>
+          <</if>>
+        <</for>>
+      <</if>>
+
+      /* --- 属性修正 --- */
+      <<if _ajtuDef.statMod>>
+        <<set _ajtuMKeys = Object.keys(_ajtuDef.statMod)>>
+        <<for _ajtuM = 0; _ajtuM < _ajtuMKeys.length; _ajtuM++>>
+          <<set _ajtuMK = _ajtuMKeys[_ajtuM]>>
+          <<set _ajtuMV = _ajtuDef.statMod[_ajtuMK]>>
+          <<if _ajtuUnit[_ajtuMK] !== undefined>>
+            <<set _ajtuUnit[_ajtuMK] += _ajtuMV>>
+            /* 如果改的是maxHP/maxMP，同步Remain */
+            <<if _ajtuMK === "maxHP">><<set _ajtuUnit.RemainHP = _ajtuUnit.maxHP>><</if>>
+            <<if _ajtuMK === "maxMP">><<set _ajtuUnit.RemainMP = _ajtuUnit.maxMP>><</if>>
+          <</if>>
+        <</for>>
+      <</if>>
+
+    <</if>>
+  <</for>>
+<</widget>>
+
+
+
+/*
+  lookupName：根据一个key，在所有已知的库中查找其显示名。放 _lookedUpName。
+  查找顺序：
+    1. $SpellLibrary[key].name
+    2. $FormationLibrary[key].name
+    3. $SkillLibrary[key].name
+    4. $WeaponLibrary[key].name
+    5. $ArtificeLibrary[key].name
+    6. $AbilityNames[key]
+    7. $CraftLibrary[key].name
+    8. $JobTagLibrary[key].name
+    9. 都没找到 → 返回key本身
+
+  _args[0]=key字符串
+*/
+<<widget "lookupName">>
+  <<set _lnKey = _args[0]>>
+  <<set _lookedUpName = _lnKey>>
+
+  <<if $SpellLibrary && $SpellLibrary[_lnKey]>>
+    <<set _lookedUpName = $SpellLibrary[_lnKey].name>>
+  <<elseif $FormationLibrary && $FormationLibrary[_lnKey]>>
+    <<set _lookedUpName = $FormationLibrary[_lnKey].name>>
+  <<elseif $SkillLibrary && $SkillLibrary[_lnKey]>>
+    <<set _lookedUpName = $SkillLibrary[_lnKey].name>>
+  <<elseif $WeaponLibrary && $WeaponLibrary[_lnKey]>>
+    <<set _lookedUpName = $WeaponLibrary[_lnKey].name>>
+  <<elseif $ArtificeLibrary && $ArtificeLibrary[_lnKey]>>
+    <<set _lookedUpName = $ArtificeLibrary[_lnKey].name>>
+  <<elseif $AbilityNames && $AbilityNames[_lnKey]>>
+    <<set _lookedUpName = $AbilityNames[_lnKey]>>
+  <<elseif $CraftLibrary && $CraftLibrary[_lnKey]>>
+    <<set _lookedUpName = $CraftLibrary[_lnKey].name>>
+  <<elseif $JobTagLibrary && $JobTagLibrary[_lnKey]>>
+    <<set _lookedUpName = $JobTagLibrary[_lnKey].name>>
+  <</if>>
+<</widget>>

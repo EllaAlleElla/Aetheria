@@ -1,0 +1,103 @@
+:: Library-Location
+
+/*
+  $LocationLibrary：地点注册表。
+  每个条目描述一个可以作为委托目的地的地点。
+
+  key = 唯一标识（建议和passage名一致或相关，方便你查找）
+
+  字段说明：
+    region      所属大地区tag（字符串），如"Valentia"
+                你在委托板所在的passage里设 $CurrentRegion = "Valentia"，
+                委托就只会从同region的地点里选。
+
+    typeTag     地形类型tag（字符串），如"forest"/"urban"/"field"/"alley"/"suburb"
+                委托模板按这个来匹配。
+
+    displayName 在委托板上显示的地点名（字符串），如"北部密林"
+
+    passage     玩家前往该地点时跳转的passage名（字符串）
+                这个passage里会检测玩家是否有对应委托，如果有就显示"执行委托"链接。
+
+    minTier     最低委托评级（字符串），该地点只出现在这个评级及以上的委托里。
+                缺省"D"表示任何级别都可能指向这里。
+
+    terrainTags 随机生成战斗地图时用的地形tag数组，如["forest"]。
+                会传给generateGrid。
+*/
+
+/*
+每加入一个新地点passage,就把这段代码放到最底下
+
+<<hasCommissionHere>>
+<<if _hasCommHere>>
+  <hr>
+  <span style="color:#ff0">【委托】你的目标就在附近。</span><br>
+  <<set _hcComm = $CommissionBoard[$ActiveCommission]>>
+  <<if _hcComm.isSpecial && _hcComm.specialPassage>>
+    <<link "执行委托">><<goto _hcComm.specialPassage>><</link>><br>
+  <<else>>
+    <<link "执行委托">><<goto "Commission Execute">><</link>><br>
+  <</if>>
+<</if>>
+*/
+
+<<set $LocationLibrary = {
+
+    /* ===== Valentia（瓦伦提亚）地区示例 ===== */
+
+    valentia_north_forest: {
+        region: "Valentia",
+        typeTag: "forest",
+        displayName: "北部密林",
+        passage: "Valentia-North Forest",
+        minTier: "D",
+        terrainTags: ["forest"]
+    },
+
+    valentia_east_field: {
+        region: "Valentia",
+        typeTag: "field",
+        displayName: "东郊田野",
+        passage: "Valentia-East Field",
+        minTier: "D",
+        terrainTags: ["plain"]
+    },
+
+    valentia_south_suburb: {
+        region: "Valentia",
+        typeTag: "suburb",
+        displayName: "南城郊外",
+        passage: "Valentia-South Suburb",
+        minTier: "D",
+        terrainTags: ["plain"]
+    },
+
+    valentia_alley: {
+        region: "Valentia",
+        typeTag: "alley",
+        displayName: "小巷深处",
+        passage: "Valentia-Dark Alley",
+        minTier: "C",
+        terrainTags: ["plain"]
+    },
+
+    valentia_mountain_path: {
+        region: "Valentia",
+        typeTag: "mountain",
+        displayName: "山间小路",
+        passage: "Valentia-Mountain Path",
+        minTier: "B",
+        terrainTags: ["mountain"]
+    },
+
+    valentia_volcano_cave: {
+        region: "Valentia",
+        typeTag: "volcano",
+        displayName: "火山洞窟",
+        passage: "Valentia-Volcano Cave",
+        minTier: "A",
+        terrainTags: ["volcano"]
+    }
+
+}>>

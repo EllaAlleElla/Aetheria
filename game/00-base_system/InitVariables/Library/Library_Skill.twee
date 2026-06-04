@@ -50,3 +50,13 @@
         targetMode: "cell"
     }
 }>>
+
+<<set $SkillLibrary.firstAid = {
+    name: "急救",
+    cost: [{ res:"RemainSpeedLevel", value:20 }],
+    targetMode: "self",
+    requireWeapon: false,
+    applyBuffs: [],
+    healSelf: true,
+    healValue: 30
+}>>

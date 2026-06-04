@@ -1,7 +1,8 @@
 :: Player Data
 <<set $PlayerName = "A">>
 <<set $PlayerNickname = "小A">>
-<<set $PlayerSpecialAttitude = "">>
+
+<<set $PlayerSpecialPersonality = []>>
 
 <<set $Player = {
     originId: "player",
@@ -30,5 +31,10 @@
     status: "alive"
 }>>
 
-/* 特殊npc数组, 数据都存在各自的独立passage里 */
-<<set $PersistNPC = {}>>
+
+<<set $Player.crafts = {}>>
+<<set $Player.craftAbilities = []>>
+<<set $Player.craftRecipes = []>>
+<<set $Player.jobTags = []>>
+<<set $Player.craftBonuses = {}>>
+

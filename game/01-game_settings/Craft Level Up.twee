@@ -1,0 +1,36 @@
+:: Craft Exp Gain Display [nobr]
+/*
+  使用前需设置：
+    $CraftGainKey     = 技艺key
+    $CraftGainAmount  = 获得的经验数值
+    $CraftGainResult  = gainCraftExp返回的_craftGainResult
+
+    使用例:
+
+    玩家获得了30exp炼金经验
+    <<set $CraftGainKey = "alchemy">>
+    <<set $CraftGainAmount = 30>>
+    <<gainCraftExp $Player "alchemy" 30>>
+    <<set $CraftGainResult = _craftGainResult>>
+
+    <<include "Craft Exp Gain Display">>
+
+*/
+<<if $CraftGainResult>>
+  <<set _cegDef = $CraftLibrary[$CraftGainKey]>>
+  <<set _cegName = _cegDef ? _cegDef.name : $CraftGainKey>>
+
+  <<= _cegName>>经验 +<<= $CraftGainAmount>>
+
+  <<if $CraftGainResult.levelsGained > 0>>
+    <br><strong><<= _cegName>>提升到了 Lv<<getCraftLevel $Player $CraftGainKey>><<= _craftLevel>>！</strong>
+
+    <<if $CraftGainResult.newUnlocks.length > 0>>
+      <br>新解锁：
+      <<for _cegU = 0; _cegU < $CraftGainResult.newUnlocks.length; _cegU++>>
+        <<set _cegUnlock = $CraftGainResult.newUnlocks[_cegU]>>
+        <br>　・<<= _cegUnlock.desc>>
+      <</for>>
+    <</if>>
+  <</if>>
+<</if>>

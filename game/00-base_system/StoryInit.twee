@@ -4,13 +4,6 @@
 <<include "Game Init Settings">>
 <<include "Game Base">>
 
-<<include "Battle Data">>
-
-/* 玩家数据 */
-<<include "Player Data">>
-
-/* 特殊npc */
-<<include "Special NPC-Edwin">>
 
 /* 数据库 */
 <<include "Library-Spell Casting">>
@@ -21,3 +14,22 @@
 <<include "Library-Species">>
 <<include "Library-Weapon">>
 <<include "Library-Map">>
+<<include "Library-Combat">>
+<<include "Library-Location">>
+<<include "Library-CommissionTemplate">>
+<<include "Library-SpecialCommission">>
+<<include "Library-Craft">>
+<<include "Library-JobTag">>
+
+
+/* 玩家数据 */
+<<include "Player Data">>
+
+/* 特殊npc */
+<<include "Special NPC-Edwin">>
+
+/* 战斗系统 */
+<<include "Battle Data">>
+
+/* 委托系统 */
+<<include "Commission Data">>

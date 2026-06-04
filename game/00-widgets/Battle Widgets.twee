@@ -136,6 +136,23 @@
 <<widget "stat">>
   <<set _statU = _args[0]>>
   <<set _statName = _args[1]>>
+
+  /* 技艺被动加值（仅有originId的单位，即来自持久对象的） */
+  <<if _statU.originId>>
+    <<set _statPersist = null>>
+    <<if _statU.originId === "player">>
+      <<set _statPersist = $Player>>
+    <<elseif $PersistNPC[_statU.originId]>>
+      <<set _statPersist = $PersistNPC[_statU.originId]>>
+    <</if>>
+    <<if _statPersist && _statPersist.craftBonuses && _statPersist.craftBonuses[_statName] !== undefined>>
+      <<set _val += _statPersist.craftBonuses[_statName]>>
+    <</if>>
+  <</if>>
+
+  <<set _stat = _val>>
+
+
   <<set _val = _statU[_statName]>>
 
   <<for _statB = 0; _statB < _statU.buff.length; _statB++>>
@@ -1929,6 +1946,9 @@
     <</if>>
   <</for>>
   <<set $BattleResult.expGained = _sbExp>>
+  /* 收集战利品 */
+  <<collectLoot>>
+
 
   /* 写回ally持久对象 + 全额给经验给存活ally */
   <<for _sb = 0; _sb < $Units.length; _sb++>>
@@ -2009,6 +2029,7 @@
   <<set _scbMage = _args[1] === true>>
 
   <<set $Units = []>>
+  <<clearLootOnBattleStart>>
   <<set $UnitIdCounter = 0>>
   <<set $ActionLog = "">>
   <<set $BattleTurnLog = "">>
@@ -2037,6 +2058,8 @@
   <<set $BattleLose = "Cheat Menu">>
   <<set $BattleFlee = "Cheat Menu">>
   
+  <<set $CombatRules = { canFlee:true, lethalOverride:null }>>
+
   <<set $Field = { buff:[], triggers:[], tick:0, round:1, grid:null }>>
   <<if $CheatUseFixedMap && $MapLibrary[$CheatUseFixedMap]>>
     <<loadMap $CheatUseFixedMap>>
@@ -2633,13 +2656,15 @@
   <<set _canMove = false>>
   <<set _moveCost = 0>>
 
-  <<if $Field.grid && _cmU.pos>>
+  /* 无法移动检测 */
+  <<if _cmU.traits && _cmU.traits.indexOf("immobile") !== -1>>
+    /* 直接返回不可移动 */
+  <<elseif $Field.grid && _cmU.pos>>
     <<chebyshev _cmU.pos.x _cmU.pos.y _cmTx _cmTy>>
     <<if _dist === 1>>
       <<cellAt _cmTx _cmTy>><<set _cmTgtCell = _cell>>
       <<cellAt _cmU.pos.x _cmU.pos.y>><<set _cmFromCell = _cell>>
       <<if _cmTgtCell && _cmTgtCell.occupiable>>
-        /* 检查是否有别的active单位占据目标格 */
         <<set _cmOccupied = false>>
         <<for _cm = 0; _cm < $Units.length; _cm++>>
           <<if $Units[_cm].status === "active" && not $Units[_cm].isFormation && $Units[_cm].pos && $Units[_cm].pos.x === _cmTx && $Units[_cm].pos.y === _cmTy>>
@@ -2648,35 +2673,33 @@
         <</for>>
         <<if not _cmOccupied>>
           <<set _cmFly = _cmU.traits && _cmU.traits.indexOf("fly") !== -1>>
-          /* verylow判定 */
           <<if _cmTgtCell.elevation === "verylow">>
             <<if _cmFly>>
               <<set _canMove = true>>
-              <<set _moveCost = 15>>   /* 10 + 飞行5 */
+              <<set _moveCost = 15>>
             <</if>>
           <<elseif _cmTgtCell.elevation === "high">>
-            /* 必须从mid/high出发 */
             <<if _cmFromCell && (_cmFromCell.elevation === "mid" || _cmFromCell.elevation === "high")>>
               <<set _canMove = true>>
-              <<set _moveCost = 15>>   /* 10 + high5 */
+              <<set _moveCost = 15>>
             <<elseif _cmFly>>
               <<set _canMove = true>>
-              <<set _moveCost = 20>>   /* 10 + high5 + 飞5 */
+              <<set _moveCost = 20>>
             <</if>>
           <<else>>
-            /* low / mid 普通可进 */
             <<set _canMove = true>>
             <<set _moveCost = 10>>
-            <<if _canMove>>
-              <<extraCost _cmU "moveCostAdd">>
-              <<set _moveCost += _extraCost>>
-            <</if>>
           <</if>>
         <</if>>
       <</if>>
     <</if>>
+    <<if _canMove>>
+      <<extraCost _cmU "moveCostAdd">>
+      <<set _moveCost += _extraCost>>
+    <</if>>
   <</if>>
 <</widget>>
+
 
 
 /*
@@ -3291,41 +3314,81 @@
 <</widget>>
 
 
+
 /*
-  allyCanSee：判断某敌方单位是否被我方看见，放 _canSee。
-  规则：敌人不在烟雾格→可见；在烟雾格→若我方有任一存活非烟雾单位则可见(共享视野)；
-        或观察者/任一我方单位有seeThrough特质则可见。
-  _args[0]=敌方单位 _args[1]=我方side("ally"/"enemy"，即观察方阵营)
+  allyCanSee：判断某敌方单位是否被观察方看见，放 _canSee。
+  规则：
+   1. 敌人在烟雾格里 → 永远不可见（除非观察方有seeThrough）。
+   2. 敌人不在烟雾格里：
+      - 我方全员都在烟雾里 → 看不见
+      - 至少一个我方单位不在烟雾里 → 看得见
+   seeThrough特质：观察方任一单位有它，则看穿一切。
+  _args[0]=敌方单位 _args[1]=观察方side("ally"/"enemy")
 */
 <<widget "allyCanSee">>
   <<set _acsTarget = _args[0]>>
   <<set _acsSide = _args[1]>>
-  <<set _canSee = true>>
 
-  <<if $Field.grid && _acsTarget.pos>>
-    <<cellAt _acsTarget.pos.x _acsTarget.pos.y>>
-    <<if _cell && _cell.obscured>>
-      /* 敌人在烟雾里：默认不可见，除非满足条件 */
-      <<set _canSee = false>>
-      <<for _acs = 0; _acs < $Units.length; _acs++>>
-        <<set _acsU = $Units[_acs]>>
-        <<if _acsU.side === _acsSide && _acsU.status === "active" && not _acsU.isFormation>>
-          /* 有seeThrough特质 → 可见 */
-          <<if _acsU.special && _acsU.special.indexOf("seeThrough") !== -1>>
-            <<set _canSee = true>><<break>>
-          <</if>>
-          /* 该我方单位不在烟雾 → 共享视野可见 */
-          <<if _acsU.pos>>
-            <<cellAt _acsU.pos.x _acsU.pos.y>>
-            <<if not (_cell && _cell.obscured)>>
-              <<set _canSee = true>><<break>>
-            <</if>>
-          <</if>>
+  /* 无地图时永远可见 */
+  <<if not $Field.grid>>
+    <<set _canSee = true>>
+  <<else>>
+
+    /* ===== 事实0：观察方有没有seeThrough（看穿一切） ===== */
+    <<set _acsSeeThrough = false>>
+    <<for _acs = 0; _acs < $Units.length; _acs++>>
+      <<set _acsU = $Units[_acs]>>
+      <<if _acsU.side === _acsSide && _acsU.status === "active" && not _acsU.isFormation>>
+        <<if _acsU.special && _acsU.special.indexOf("seeThrough") !== -1>>
+          <<set _acsSeeThrough = true>><<break>>
         <</if>>
-      <</for>>
+      <</if>>
+    <</for>>
+
+    /* ===== 事实A：目标敌人是否在烟雾格里 ===== */
+    <<set _acsTargetInSmoke = false>>
+    <<if _acsTarget.pos>>
+      <<cellAt _acsTarget.pos.x _acsTarget.pos.y>>
+      <<if _cell && _cell.obscured>>
+        <<set _acsTargetInSmoke = true>>
+      <</if>>
     <</if>>
+
+    /* ===== 事实B：我方是否“全员陷于烟雾”（没有任何一个在清晰格） ===== */
+    <<set _acsAnyClearAlly = false>>
+    <<for _acs = 0; _acs < $Units.length; _acs++>>
+      <<set _acsU = $Units[_acs]>>
+      <<if _acsU.side === _acsSide && _acsU.status === "active" && not _acsU.isFormation>>
+        /* 该我方单位是否在清晰格 */
+        <<if _acsU.pos>>
+          <<cellAt _acsU.pos.x _acsU.pos.y>>
+          <<if not (_cell && _cell.obscured)>>
+            <<set _acsAnyClearAlly = true>><<break>>
+          <</if>>
+        <<else>>
+          /* 无位置(无地图战兜底)，视为在清晰处 */
+          <<set _acsAnyClearAlly = true>><<break>>
+        <</if>>
+      <</if>>
+    <</for>>
+
+    /* ===== 组合判定 ===== */
+    <<if _acsSeeThrough>>
+      <<set _canSee = true>>
+    <<elseif _acsTargetInSmoke>>
+      /* 规则1：敌人在烟雾 → 看不见 */
+      <<set _canSee = false>>
+    <<elseif not _acsAnyClearAlly>>
+      /* 规则2：我方全员陷于烟雾 → 看不见 */
+      <<set _canSee = false>>
+    <<else>>
+      /* 敌人不在烟雾 且 至少一个我方在清晰格 → 看得见 */
+      <<set _canSee = true>>
+    <</if>>
+
   <</if>>
 <</widget>>
+
 
 /*
   tryFlee：尝试逃跑。成功率基于我方vs敌方平均initiative。
@@ -3495,13 +3558,19 @@
 
     /* ---- self：对自己加buff(格挡) ---- */
     <<case "self">>
-      <<if _dsSk.applyBuffs>>
+      <<if _dsSk.applyBuffs && _dsSk.applyBuffs.length > 0>>
         <<for _ds = 0; _ds < _dsSk.applyBuffs.length; _ds++>>
           <<set _dsB = _dsSk.applyBuffs[_ds]>>
           <<applyBuff _dsU `{ buffId:_dsB.buffId, duration:_dsB.duration, stackPerLevel:1, castingLevel:1 }`>>
         <</for>>
+        <<set $ActionLog = _dsU.name + "摆出了" + _dsSk.name + "的架势。">>
       <</if>>
-      <<set $ActionLog = _dsU.name + "摆出了" + _dsSk.name + "的架势。">>
+      <<if _dsSk.healSelf>>
+        <<set _dsHeal = _dsSk.healValue || 0>>
+        <<applyDamage _dsU `{ amount:-_dsHeal, damageType:"true", element:"none", tags:[] }`>>
+        <<set $ActionLog = _dsU.name + "进行了急救，恢复了" + _dsHeal + "点生命。">>
+      <</if>>
+
 
     /* ---- cell：选格攻击(单体/区域，连击) ---- */
     <<case "cell">>
@@ -3750,25 +3819,64 @@
   _args[0]=tag数组，如 ["魔物","低级"]（含一个category-tag和一个等级tag）
   category-tag匹配物种的category或categories；等级tag定level。
   无匹配物种→生成占位史莱姆并标记$PlaceholderEnemy=true。
+
+  使用例:
+   在野外随机生成一个怪物类敌人（会自动获得战斗类职业tag） 
+  <<generateEnemyFromTags `["monster","低级","野外"]`>>
+
+   在集市随机生成一个人形敌人（会自动获得商业/社交类职业tag） 
+  <<generateEnemyFromTags `["humanlike","中级","集市"]`>>
+
+   直接指定职业tag 
+  <<generateEnemyFromTags `["humanlike","中级","施法者","炼金术师"]`>>
+
 */
 <<widget "generateEnemyFromTags">>
   <<set _geTags = _args[0]>>
 
-  /* 拆分：等级tag vs 物种tag */
+  /* 拆分：等级信息 / 物种tag / 场景tag */
   <<set _geLevelTags = ["低级","中级","高级"]>>
-  <<set _geLvTag = "低级">>
+  <<set _geLvTag = "">>
+  <<set _geLvObj = null>>
   <<set _geCatTags = []>>
+  <<set _geSceneTag = "">>           /* ★新增 */
+  <<set _geJobTags = []>>            /* ★新增：直接指定的职业tag */
+
   <<for _ge = 0; _ge < _geTags.length; _ge++>>
-    <<if _geLevelTags.indexOf(_geTags[_ge]) !== -1>>
+    <<if typeof _geTags[_ge] === "object" && _geTags[_ge] !== null && _geTags[_ge].lvMin !== undefined>>
+      <<set _geLvObj = _geTags[_ge]>>
+    <<elseif _geLevelTags.indexOf(_geTags[_ge]) !== -1>>
       <<set _geLvTag = _geTags[_ge]>>
+    <<elseif $SceneJobTagRules && $SceneJobTagRules[_geTags[_ge]]>>
+      /* ★这是一个场景tag（在$SceneJobTagRules里有定义） */
+      <<set _geSceneTag = _geTags[_ge]>>
+    <<elseif $JobTagLibrary && $JobTagLibrary[_geTags[_ge]]>>
+      /* ★这是一个直接指定的职业tag */
+      <<run _geJobTags.push(_geTags[_ge])>>
     <<else>>
       <<run _geCatTags.push(_geTags[_ge])>>
     <</if>>
   <</for>>
 
+
+  /* 确定等级范围 */
+  <<if _geLvObj !== null>>
+    <<set _lvMin = _geLvObj.lvMin>>
+    <<set _lvMax = _geLvObj.lvMax>>
+  <<elseif _geLvTag !== "">>
+    <<levelRangeFromTag _geLvTag>>
+  <<else>>
+    <<levelRangeFromTag "低级">>
+  <</if>>
+
+  /* 硬限70 */
+  <<if _lvMax > 70>><<set _lvMax = 70>><</if>>
+  <<if _lvMin > _lvMax>><<set _lvMin = _lvMax>><</if>>
+
   /* 等级范围 → 随机level */
-  <<levelRangeFromTag _geLvTag>>
   <<set _geLevel = _lvMin + Math.floor(Math.random() * (_lvMax - _lvMin + 1))>>
+
+  /* ===== 以下完全不变，从"筛选匹配物种"开始到widget结尾原封不动 ===== */
 
   /* 筛选匹配物种：category 或 categories 含任一物种tag */
   <<set _geKeys = Object.keys($SpeciesLibrary)>>
@@ -3866,6 +3974,24 @@ DEBUG生成: cat=<<= _geCat>> name=<<= _geName>> lv=<<= _geLevel>><br>
       level: _geLevel
   }`>>
 
+  /* ★职业tag应用 */
+  <<set _geNewUnit = $Units[$Units.length - 1]>>
+  <<set _geApplyTags = _geJobTags.slice()>>
+  /* 如果有场景tag，roll场景职业tag */
+  <<if _geSceneTag !== "">>
+    <<rollSceneJobTags _geSceneTag>>
+    <<for _geRT = 0; _geRT < _rolledJobTags.length; _geRT++>>
+      <<if _geApplyTags.indexOf(_rolledJobTags[_geRT]) === -1>>
+        <<run _geApplyTags.push(_rolledJobTags[_geRT])>>
+      <</if>>
+    <</for>>
+  <</if>>
+  /* 应用所有职业tag */
+  <<if _geApplyTags.length > 0>>
+    <<applyJobTagsToUnit _geNewUnit _geApplyTags>>
+    /* 记录到单位数据上（显示/调试用） */
+    <<set _geNewUnit.jobTags = _geApplyTags.slice()>>
+  <</if>>
 
 <</widget>>
 
@@ -3915,3 +4041,283 @@ DEBUG生成: cat=<<= _geCat>> name=<<= _geName>> lv=<<= _geLevel>><br>
     <<generateGrid `["plain"]`>>
   <</if>>
 <</widget>> 
+
+
+/*
+  startCombat：从战斗配置对象发起一场完整战斗。
+  _args[0]=combat config对象（直接传或从$CombatLibrary取）
+  清空Units/Field → 加载地图 → 生成敌人 → 拉入友方 → 设跳转 → goto Battle。
+*/
+<<widget "startCombat">>
+  <<set _scCfg = _args[0]>>
+
+  /* 重置战斗状态 */
+  <<set $Units = []>>
+  <<clearLootOnBattleStart>>
+  <<set $UnitIdCounter = 0>>
+  <<set $Field = { buff:[], triggers:[], tick:0, round:1, grid:null }>>
+  <<set $ActionLog = "">>
+  <<set $BattleTurnLog = "">>
+  <<set $ActiveActorId = "">>
+  <<set $PendingSpell = "">>
+  <<set $PendingFormation = "">>
+  <<set $PendingItem = "">>
+  <<set $PendingSkill = "">>
+  <<set $CastLevelChoice = 1>>
+  <<set $AttackHeavy = 0>>
+  <<set $BattleResult = { defeated:[], expGained:0 }>>
+  <<set $BattleExitReason = "">>
+  <<set $PlaceholderEnemy = false>>
+
+  /* === 玩家入场 === */
+  <<set $Player.RemainHP = $Player.maxHP>>
+  <<set $Player.RemainMP = $Player.maxMP>>
+  <<set $Player.status = "alive">>
+  <<enlistUnit $Player "ally" true>>
+
+  /* === 友方NPC入场 === */
+  <<if _scCfg.allies>>
+    <<for _scA = 0; _scA < _scCfg.allies.length; _scA++>>
+      <<set _scAlly = _scCfg.allies[_scA]>>
+      <<spawnCombatUnit _scAlly "ally">>
+    <</for>>
+  <</if>>
+
+
+  /* === 敌人生成 === */
+  <<if _scCfg.enemies>>
+    <<for _scE = 0; _scE < _scCfg.enemies.length; _scE++>>
+      <<set _scEntry = _scCfg.enemies[_scE]>>
+      <<spawnCombatUnit _scEntry "enemy">>
+    <</for>>
+  <</if>>
+
+  /* === 地图 === */
+  <<if _scCfg.mapMode === "fixed" && _scCfg.mapKey>>
+    <<loadMap _scCfg.mapKey>>
+  <<elseif _scCfg.mapMode === "generate" && _scCfg.mapTags>>
+    <<generateGrid _scCfg.mapTags>>
+  <<else>>
+    <<generateGrid `["plain"]`>>
+  <</if>>
+  <<placeUnitsOnGrid>>
+
+  /* === 场地buff === */
+  <<if _scCfg.fieldBuffs>>
+    <<for _scF = 0; _scF < _scCfg.fieldBuffs.length; _scF++>>
+      <<run $Field.buff.push(clone(_scCfg.fieldBuffs[_scF]))>>
+    <</for>>
+  <</if>>
+
+  /* === 场地触发器(增援等) === */
+  <<if _scCfg.fieldTriggers>>
+    <<for _scT = 0; _scT < _scCfg.fieldTriggers.length; _scT++>>
+      <<set _scTrig = clone(_scCfg.fieldTriggers[_scT])>>
+      /* 触发器的payload如果是species/npc来源，标记给fireTrigger用 */
+      <<run $Field.triggers.push(_scTrig)>>
+    <</for>>
+  <</if>>
+
+  /* === 跳转设置 === */
+  <<set $BattleWin = _scCfg.onWin || "">>
+  <<set $BattleLose = _scCfg.onLose || "">>
+  <<set $BattleFlee = _scCfg.onFlee || _scCfg.onLose || "">>
+
+  /* === 特殊规则 === */
+  <<if _scCfg.rules>>
+    <<set $CombatRules = clone(_scCfg.rules)>>
+  <<else>>
+    <<set $CombatRules = { canFlee:true, lethalOverride:null }>>
+  <</if>>
+
+  /* 委托bonus先手 */
+  <<if $CommissionPendingBonus>>
+    <<set _scbPlayer = $Units.find(function(u){ return u.isPlayer; })>>
+    <<if _scbPlayer>>
+      <<set _scbPlayer.gauge += 50>>
+    <</if>>
+    <<set $CommissionPendingBonus = false>>
+  <</if>>
+
+
+  <<goto "Battle">>
+<</widget>>
+
+
+/*
+  spawnCombatUnit：按单个敌人/友方配置条目生成单位。
+  _args[0]=条目对象{source,tags/npcKey/data} _args[1]=side("enemy"/"ally")
+*/
+<<widget "spawnCombatUnit">>
+  <<set _scuEntry = _args[0]>>
+  <<set _scuSide = _args[1]>>
+
+  <<if _scuEntry.source === "species">>
+    /* 按tag从物种库随机生成 */
+    <<generateEnemyFromTags _scuEntry.tags>>
+
+  <<elseif _scuEntry.source === "npc">>
+    <<if $PersistNPC[_scuEntry.npcKey]>>
+      <<set _scuNpc = $PersistNPC[_scuEntry.npcKey]>>
+      <<set _scuNpc.RemainHP = _scuNpc.maxHP>>
+      <<set _scuNpc.RemainMP = _scuNpc.maxMP>>
+      <<set _scuNpc.status = "alive">>
+      <<enlistUnit _scuNpc _scuSide>>
+      /* 应用overrides到刚入场的战斗单位(不改持久数据) */
+      <<if _scuEntry.overrides>>
+        <<set _scuLast = $Units[$Units.length - 1]>>
+        <<if _scuEntry.overrides.traits>>
+          <<for _scuO = 0; _scuO < _scuEntry.overrides.traits.length; _scuO++>>
+            <<if _scuLast.traits.indexOf(_scuEntry.overrides.traits[_scuO]) === -1>>
+              <<run _scuLast.traits.push(_scuEntry.overrides.traits[_scuO])>>
+            <</if>>
+          <</for>>
+        <</if>>
+        <<if _scuEntry.overrides.special>>
+          <<for _scuO = 0; _scuO < _scuEntry.overrides.special.length; _scuO++>>
+            <<if _scuLast.special.indexOf(_scuEntry.overrides.special[_scuO]) === -1>>
+              <<run _scuLast.special.push(_scuEntry.overrides.special[_scuO])>>
+            <</if>>
+          <</for>>
+        <</if>>
+        <<if _scuEntry.overrides.category>>
+          <<set _scuLast.category = _scuEntry.overrides.category>>
+        <</if>>
+      <</if>>
+    <</if>>
+
+
+  <<elseif _scuEntry.source === "custom">>
+    /* 自定义数据直接spawn */
+    <<set _scuData = clone(_scuEntry.data)>>
+    <<set _scuData.side = _scuSide>>
+    <<if _scuData.RemainHP === undefined>><<set _scuData.RemainHP = _scuData.maxHP>><</if>>
+    <<if _scuData.RemainMP === undefined>><<set _scuData.RemainMP = _scuData.maxMP>><</if>>
+    <<if _scuData.status === undefined>><<set _scuData.status = "active">><</if>>
+    <<spawnUnit _scuData>>
+  <</if>>
+<</widget>>
+
+
+/*
+  collectLoot：从所有被击败的敌方单位身上收集道具到$BattleLoot。
+  在settleBattle里调用。不清空敌人的items（保持数据完整），只复制。
+  同名道具会合并数量。
+*/
+<<widget "collectLoot">>
+  <<set $BattleLoot = []>>
+  <<set $BattleLootDay = $day>>
+
+  <<for _clU = 0; _clU < $Units.length; _clU++>>
+    <<set _clUnit = $Units[_clU]>>
+    /* 只收集敌方的、被击败/死亡的 */
+    <<if _clUnit.side === "enemy" && _clUnit.status !== "active" && _clUnit.items && _clUnit.items.length > 0>>
+      <<for _clI = 0; _clI < _clUnit.items.length; _clI++>>
+        <<set _clItem = _clUnit.items[_clI]>>
+        <<if _clItem.count > 0>>
+          /* 在$BattleLoot里找同id的条目 */
+          <<set _clFound = false>>
+          <<for _clL = 0; _clL < $BattleLoot.length; _clL++>>
+            <<if $BattleLoot[_clL].id === _clItem.id>>
+              <<set $BattleLoot[_clL].count += _clItem.count>>
+              <<set _clFound = true>>
+              <<break>>
+            <</if>>
+          <</for>>
+          <<if not _clFound>>
+            <<run $BattleLoot.push({ id:_clItem.id, count:_clItem.count })>>
+          <</if>>
+        <</if>>
+      <</for>>
+    <</if>>
+  <</for>>
+<</widget>>
+
+
+/*
+  pickupLoot：玩家捡拾战利品池中的某个道具。
+  _args[0] = 道具id（字符串）
+  _args[1] = 捡拾数量（数字，缺省=全部）
+
+  从$BattleLoot扣除 → 加到$Player.items。
+*/
+<<widget "pickupLoot">>
+  <<set _plId = _args[0]>>
+  <<set _plAmt = _args[1]>>
+
+  /* 在战利品池里找到这个道具 */
+  <<set _plIdx = -1>>
+  <<for _pl = 0; _pl < $BattleLoot.length; _pl++>>
+    <<if $BattleLoot[_pl].id === _plId>>
+      <<set _plIdx = _pl>>
+      <<break>>
+    <</if>>
+  <</for>>
+
+  <<if _plIdx !== -1>>
+    /* 确定实际捡拾数量 */
+    <<set _plAvail = $BattleLoot[_plIdx].count>>
+    <<if _plAmt === undefined || _plAmt > _plAvail>>
+      <<set _plAmt = _plAvail>>
+    <</if>>
+
+    /* 从池子扣除 */
+    <<set $BattleLoot[_plIdx].count -= _plAmt>>
+
+    /* 加到玩家背包 */
+    <<set _plFound = false>>
+    <<for _pl = 0; _pl < $Player.items.length; _pl++>>
+      <<if $Player.items[_pl].id === _plId>>
+        <<set $Player.items[_pl].count += _plAmt>>
+        <<set _plFound = true>>
+        <<break>>
+      <</if>>
+    <</for>>
+    <<if not _plFound>>
+      <<run $Player.items.push({ id:_plId, count:_plAmt })>>
+    <</if>>
+
+    /* 移除数量为0的条目 */
+    <<set _plKept = []>>
+    <<for _pl = 0; _pl < $BattleLoot.length; _pl++>>
+      <<if $BattleLoot[_pl].count > 0>>
+        <<run _plKept.push($BattleLoot[_pl])>>
+      <</if>>
+    <</for>>
+    <<set $BattleLoot = _plKept>>
+  <</if>>
+<</widget>>
+
+
+/*
+  pickupAllLoot：一键捡拾所有战利品。
+*/
+<<widget "pickupAllLoot">>
+  <<for _pal = $BattleLoot.length - 1; _pal >= 0; _pal-->>
+    <<pickupLoot $BattleLoot[_pal].id $BattleLoot[_pal].count>>
+  <</for>>
+<</widget>>
+
+
+/*
+  checkLootExpire：检查战利品是否过期，过期则清空。
+  在PassageReady或打开背包时调用。
+*/
+<<widget "checkLootExpire">>
+  <<if $BattleLoot.length > 0 && $BattleLootDay >= 0>>
+    <<if $day - $BattleLootDay >= $LootExpireDays>>
+      <<set $BattleLoot = []>>
+      <<set $BattleLootDay = -1>>
+    <</if>>
+  <</if>>
+<</widget>>
+
+
+/*
+  clearLootOnBattleStart：战斗开始时清空未捡的战利品。
+  在startCombat/startCommissionBattle/setupCheatBattle里调用。
+*/
+<<widget "clearLootOnBattleStart">>
+  <<set $BattleLoot = []>>
+  <<set $BattleLootDay = -1>>
+<</widget>>

@@ -87,7 +87,7 @@
             { kind:"summon", onTurnEq:3, unit:{
                 name:"大恶魔", type:"monster", special:["demonkind"],
                 maxHP:500, RemainHP:500, maxMP:200, RemainMP:200,
-                MagicLevel:30, SpeedLevel:40, atk:25, initiative:15, level:20,
+                MagicLevel:30, SpeedLevel:40, atk:25, initiative:75, level:20,
                 spell:["damage"], weapon:{ name:"魔爪", wtype:"claw", damageType:"physical", element:"none", baseValue:30, scaling:"atk", range:1, speedCost:15 }
             } }
         ]

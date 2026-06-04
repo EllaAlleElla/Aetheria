@@ -1,0 +1,214 @@
+:: Library-Craft
+
+/*
+  $CraftLibrary：技艺定义库。
+
+  每个条目描述一种技艺的基础信息和升级解锁。
+
+  字段说明：
+    name          显示名称
+    category      分类标签，用于UI分组：
+                  "production"(生产)  "combat"(战斗辅助)
+                  "knowledge"(知识)   "social"(社交)
+                  "survival"(生存)
+
+    description   简短描述
+
+    unlocks       等级解锁列表，数组。每项：
+      level       解锁所需等级
+      type        解锁类型：
+                  "skill"      → 解锁战斗skill（加入可用列表）
+                  "recipe"     → 解锁配方（炼金/锻造/烹饪用）
+                  "ability"    → 解锁非战斗能力（如自行炼药的入口）
+                  "statBonus"  → 被动属性加值
+                  "tag"        → 获得职业tag
+      ref         引用key（skill→SkillLibrary的key，recipe→配方id，
+                  ability→能力id，statBonus→属性名，tag→职业tag名）
+      value       statBonus时的加值数字（其他类型可省略）
+      desc        解锁时的提示文字
+
+    expCurve      升级经验曲线参数：
+      base        1级→2级需要的经验
+      growth      每级所需经验的增长率（乘法）
+                  level N→N+1 需要 base × growth^(N-1) 经验
+*/
+
+<<set $CraftLibrary = {
+
+    /* ===== 生产类 ===== */
+
+    alchemy: {
+        name: "炼金",
+        category: "production",
+        description: "调配药剂、炼金材料的技术。",
+        expCurve: { base: 20, growth: 1.12 },
+        unlocks: [
+            { level:5,  type:"ability", ref:"basicBrewing",   desc:"可以使用炼金台调配基础药剂。" },
+            { level:10, type:"recipe",  ref:"healPotion",     desc:"习得配方：治疗药水。" },
+            { level:15, type:"recipe",  ref:"fireBomb",       desc:"习得配方：炼金火弹。" },
+            { level:20, type:"tag",     ref:"炼金术师",        desc:"获得职业标签：炼金术师。" },
+            { level:30, type:"recipe",  ref:"poisonVial",     desc:"习得配方：毒瓶。" },
+            { level:50, type:"ability", ref:"masterBrewing",  desc:"可以不依赖炼金台调配药剂。" }
+        ]
+    },
+
+    pharmacy: {
+        name: "药学",
+        category: "production",
+        description: "辨识草药、调配药膏与药粉的知识。",
+        expCurve: { base: 15, growth: 1.10 },
+        unlocks: [
+            { level:5,  type:"ability", ref:"herbIdentify",   desc:"可以辨识常见草药。" },
+            { level:15, type:"recipe",  ref:"antidote",       desc:"习得配方：解毒剂。" },
+            { level:25, type:"tag",     ref:"药剂师",          desc:"获得职业标签：药剂师。" }
+        ]
+    },
+
+    smithing: {
+        name: "锻造",
+        category: "production",
+        description: "金属加工、武器防具的锻造技术。",
+        expCurve: { base: 25, growth: 1.15 },
+        unlocks: [
+            { level:5,  type:"ability", ref:"basicRepair",    desc:"可以修理简单的武器和防具。" },
+            { level:10, type:"recipe",  ref:"shortSword",     desc:"习得配方：短剑。" },
+            { level:20, type:"tag",     ref:"铁匠",           desc:"获得职业标签：铁匠。" },
+            { level:30, type:"recipe",  ref:"greatSword",     desc:"习得配方：巨剑。" },
+            { level:40, type:"recipe",  ref:"fireEnchantSword", desc:"习得配方：火附魔剑。" }
+        ]
+    },
+
+    cooking: {
+        name: "烹饪",
+        category: "production",
+        description: "烹调食物、制作便携口粮的技术。",
+        expCurve: { base: 10, growth: 1.08 },
+        unlocks: [
+            { level:5,  type:"ability", ref:"basicCooking",   desc:"可以使用灶台烹饪简单食物。" },
+            { level:15, type:"tag",     ref:"厨师",           desc:"获得职业标签：厨师。" }
+        ]
+    },
+
+    /* ===== 战斗辅助类 ===== */
+
+    medicine: {
+        name: "医学",
+        category: "combat",
+        description: "治疗伤口、紧急救护的医学知识。",
+        expCurve: { base: 20, growth: 1.12 },
+        unlocks: [
+            { level:5,  type:"ability",   ref:"firstAidBasic",  desc:"可以在非战斗中进行基础急救。" },
+            { level:15, type:"skill",     ref:"firstAid",       desc:"解锁战斗剑技：急救。" },
+            { level:20, type:"tag",       ref:"治疗师",          desc:"获得职业标签：治疗师。" },
+            { level:30, type:"statBonus", ref:"healPower", value:10, desc:"治疗效果+10%（被动）。" }
+        ]
+    },
+
+    tactics: {
+        name: "战术",
+        category: "combat",
+        description: "战场判断、指挥与战略规划的能力。",
+        expCurve: { base: 25, growth: 1.15 },
+        unlocks: [
+            { level:10, type:"statBonus", ref:"initiative", value:5, desc:"先攻+5（被动）。" },
+            { level:25, type:"tag",       ref:"战术家",     desc:"获得职业标签：战术家。" },
+            { level:40, type:"statBonus", ref:"initiative", value:10, desc:"先攻再+10（被动）。" }
+        ]
+    },
+
+    /* ===== 知识类 ===== */
+
+    arcana: {
+        name: "奥术学",
+        category: "knowledge",
+        description: "对魔法理论和奥术构造的理解。",
+        expCurve: { base: 30, growth: 1.15 },
+        unlocks: [
+            { level:10, type:"statBonus", ref:"MagicLevel", value:2, desc:"魔力等级+2（被动）。" },
+            { level:20, type:"tag",       ref:"学者",       desc:"获得职业标签：学者。" },
+            { level:30, type:"statBonus", ref:"MagicLevel", value:3, desc:"魔力等级再+3（被动）。" },
+            { level:50, type:"statBonus", ref:"maxMP", value:50,     desc:"魔力上限+50（被动）。" }
+        ]
+    },
+
+    nature: {
+        name: "博物学",
+        category: "knowledge",
+        description: "对自然界生物、矿物和生态的知识。",
+        expCurve: { base: 15, growth: 1.10 },
+        unlocks: [
+            { level:5,  type:"ability", ref:"creatureIdentify", desc:"可以辨识常见魔物的弱点。" },
+            { level:20, type:"tag",     ref:"博物学家",          desc:"获得职业标签：博物学家。" }
+        ]
+    },
+
+    /* ===== 社交类 ===== */
+
+    rhetoric: {
+        name: "演说",
+        category: "social",
+        description: "说服、交涉、演讲的能力。",
+        expCurve: { base: 15, growth: 1.10 },
+        unlocks: [
+            { level:10, type:"ability", ref:"bargain",    desc:"商店交易时可以讨价还价。" },
+            { level:20, type:"tag",     ref:"演说家",      desc:"获得职业标签：演说家。" }
+        ]
+    },
+
+    performance: {
+        name: "表演",
+        category: "social",
+        description: "乐器演奏、歌唱、舞蹈等表演艺术。",
+        expCurve: { base: 10, growth: 1.08 },
+        unlocks: [
+            { level:10, type:"ability", ref:"busking",    desc:"可以在街头卖艺赚钱。" },
+            { level:25, type:"tag",     ref:"吟游诗人",    desc:"获得职业标签：吟游诗人。" }
+        ]
+    },
+
+    /* ===== 生存类 ===== */
+
+    survival: {
+        name: "生存",
+        category: "survival",
+        description: "野外求生、追踪、搭建营地的能力。",
+        expCurve: { base: 15, growth: 1.10 },
+        unlocks: [
+            { level:5,  type:"ability", ref:"tracking",   desc:"可以追踪魔物痕迹。" },
+            { level:15, type:"ability", ref:"camping",     desc:"可以在野外搭建营地休息。" },
+            { level:25, type:"tag",     ref:"游侠",        desc:"获得职业标签：游侠。" }
+        ]
+    },
+
+    stealth: {
+        name: "隐匿",
+        category: "survival",
+        description: "潜行、隐藏、暗杀的技巧。",
+        expCurve: { base: 20, growth: 1.12 },
+        unlocks: [
+            { level:10, type:"ability", ref:"sneak",      desc:"在部分场景中可以选择潜行。" },
+            { level:20, type:"tag",     ref:"盗贼",        desc:"获得职业标签：盗贼。" }
+        ]
+    }
+
+}>>
+
+
+/*
+  $AbilityNames：能力ref → 显示名 对照表。
+  配方不需要——配方ref对应的是道具/武器库里已有名字的条目。
+*/
+<<set $AbilityNames = {
+    basicBrewing:     "基础炼金",
+    masterBrewing:    "大师炼金",
+    herbIdentify:     "草药辨识",
+    basicRepair:      "基础修理",
+    basicCooking:     "基础烹饪",
+    firstAidBasic:    "基础急救（非战斗）",
+    bargain:          "讨价还价",
+    busking:          "街头卖艺",
+    tracking:         "痕迹追踪",
+    camping:          "野外扎营",
+    sneak:            "潜行",
+    creatureIdentify: "魔物辨识"
+}>>

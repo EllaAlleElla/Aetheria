@@ -1,0 +1,173 @@
+:: Library-CommissionTemplate
+
+/*
+  $CommissionTemplateLibrary：委托文本模板库。
+
+  key = typeTag（对应LocationLibrary里的typeTag）
+
+  每个模板是一个数组，同一typeTag可以有多个模板，随机选一个。
+
+  模板结构：
+    intro       开场描述文本（字符串）
+    steps       行动步骤数组，每步：
+      text      该步骤的描述
+      choices   玩家可选的行动，每个choice：
+        label   按钮文字
+        result  选了之后的结果类型：
+                "continue" → 进入下一步
+                "fight"    → 直接进入委托战斗
+                "retreat"  → 放弃本次尝试，返回地点（不算完成）
+                "bonus"    → 进入战斗前获得一个小buff
+        text    选了之后显示的文字（可选）
+    preFightText  进入战斗前的最终描述
+*/
+
+<<set $CommissionTemplateLibrary = {
+
+    forest: [
+        {
+            intro: "你沿着小径深入林中。树影婆娑，空气中弥漫着潮湿的泥土气息。",
+            steps: [
+                {
+                    text: "你发现了地上有异常的痕迹——被折断的树枝和散落的魔力残留。",
+                    choices: [
+                        { label: "沿痕迹追踪", result: "continue", text: "你小心翼翼地追踪痕迹，越来越深入密林。" },
+                        { label: "返回", result: "retreat", text: "你决定不冒险，原路返回。" }
+                    ]
+                },
+                {
+                    text: "痕迹将你引向一片开阔地。你感觉到前方有生物的气息。",
+                    choices: [
+                        { label: "直接上前", result: "fight", text: "你拔出武器，大步上前。" },
+                        { label: "绕到侧面", result: "bonus", text: "你从侧面悄悄接近，获得了先手优势。" },
+                        { label: "放弃", result: "retreat", text: "你觉得不太对劲，转身离开。" }
+                    ]
+                }
+            ],
+            preFightText: "你的目标就在眼前——"
+        },
+        {
+            intro: "密林深处安静得异常。没有鸟鸣，连风声都仿佛被树冠吞没。",
+            steps: [
+                {
+                    text: "一棵巨树的根部有明显的挖掘痕迹，周围散落着骨头碎片。",
+                    choices: [
+                        { label: "检查巢穴", result: "continue", text: "你俯身查看洞口，里面传来低沉的呼吸声。" },
+                        { label: "绕过去", result: "continue", text: "你绕开巢穴继续前进，但前方的情况也不乐观。" },
+                        { label: "返回", result: "retreat", text: "你决定改日再来。" }
+                    ]
+                },
+                {
+                    text: "无论你怎么走，你的目标似乎已经注意到了你的存在。",
+                    choices: [
+                        { label: "迎战", result: "fight", text: "既然被发现了，那就来吧。" }
+                    ]
+                }
+            ],
+            preFightText: "你握紧武器，准备战斗——"
+        }
+    ],
+
+    field: [
+        {
+            intro: "开阔的田野一望无际。远处的地平线上有什么在移动。",
+            steps: [
+                {
+                    text: "你向目标方向前进。田埂上的脚印清晰可见。",
+                    choices: [
+                        { label: "加快脚步", result: "fight", text: "你快步赶上，在一片废弃的谷仓旁发现了目标。" },
+                        { label: "谨慎接近", result: "bonus", text: "你压低身形利用田垄掩护，悄然接近。" },
+                        { label: "返回", result: "retreat", text: "距离太远了，你决定回头。" }
+                    ]
+                }
+            ],
+            preFightText: "目标就在不远处——"
+        }
+    ],
+
+    suburb: [
+        {
+            intro: "城郊的道路人迹稀少。几栋破旧的房屋零星分布在路旁。",
+            steps: [
+                {
+                    text: "一位路过的农夫告诉你，他昨晚听到了附近传来奇怪的声响。",
+                    choices: [
+                        { label: "前往调查", result: "continue", text: "你按农夫指的方向走去。" },
+                        { label: "返回", result: "retreat", text: "你觉得线索不够明确，决定回去再打听。" }
+                    ]
+                },
+                {
+                    text: "在一处坍塌的石墙后面，你看到了可疑的身影。",
+                    choices: [
+                        { label: "上前盘问", result: "fight", text: "你走上前去。对方显然不打算和平解决。" },
+                        { label: "偷袭", result: "bonus", text: "你利用石墙掩护，悄无声息地接近。" }
+                    ]
+                }
+            ],
+            preFightText: "战斗一触即发——"
+        }
+    ],
+
+    alley: [
+        {
+            intro: "狭窄的巷道弥漫着潮湿的霉味。墙壁上有涂鸦和可疑的划痕。",
+            steps: [
+                {
+                    text: "巷子深处传来金属碰撞的声音。",
+                    choices: [
+                        { label: "循声而去", result: "fight", text: "你转过弯角，正面撞上了你的目标。" },
+                        { label: "从屋顶绕行", result: "bonus", text: "你找到一处可以攀爬的位置，从上方俯瞰了目标的位置。" },
+                        { label: "返回", result: "retreat", text: "你决定不在这种地方冒险。" }
+                    ]
+                }
+            ],
+            preFightText: "狭窄的空间里，你无处可退——"
+        }
+    ],
+
+    mountain: [
+        {
+            intro: "山路崎岖难行。云雾缭绕间，你只能看清脚下的路。",
+            steps: [
+                {
+                    text: "一处悬崖边缘有被掀开的岩石和抓痕。什么大家伙经过了这里。",
+                    choices: [
+                        { label: "沿悬崖继续", result: "continue", text: "你贴着崖壁小心前行。" },
+                        { label: "返回", result: "retreat", text: "山路太危险了，你决定折返。" }
+                    ]
+                },
+                {
+                    text: "在一处平坦的山间空地上，你终于发现了目标。",
+                    choices: [
+                        { label: "战斗", result: "fight", text: "在这个海拔，没有退路。" }
+                    ]
+                }
+            ],
+            preFightText: "山风呼啸中，战斗开始——"
+        }
+    ],
+
+    volcano: [
+        {
+            intro: "炽热的空气扑面而来。脚下的岩石散发着灼人的温度。",
+            steps: [
+                {
+                    text: "前方的地面裂开了几道缝隙，岩浆从中渗出。你的目标就在裂隙对面。",
+                    choices: [
+                        { label: "跳过裂隙", result: "fight", text: "你纵身一跃，踏上了对面的岩台。" },
+                        { label: "绕路", result: "continue", text: "你找了一条稍远但安全的路绕过去。" },
+                        { label: "返回", result: "retreat", text: "太热了。你决定准备得更充分再来。" }
+                    ]
+                },
+                {
+                    text: "无论哪条路，你都来到了同一个地方——一个被岩浆半包围的洞穴入口。",
+                    choices: [
+                        { label: "进入", result: "fight", text: "你深吸一口热气，踏入洞穴。" }
+                    ]
+                }
+            ],
+            preFightText: "在炙烤般的环境中——"
+        }
+    ]
+
+}>>

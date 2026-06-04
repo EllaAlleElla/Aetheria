@@ -1,0 +1,259 @@
+:: Library-JobTag
+
+/*
+  $JobTagLibrary：职业tag定义库。
+
+  每个条目描述一种职业tag在随机生成时提供的内容。
+
+  字段：
+    name          显示名
+    category      分类："combat"(战斗职业) / "trade"(技艺职业) / "social"(社交职业)
+
+    spellPool     可能携带的法术key数组（生成时从中随机选）
+    formationPool 可能携带的法阵key数组
+    skillPool     可能携带的技能key数组
+    weaponPool    可能携带的武器key数组（生成时从中选一个）
+    itemPool      可能携带的道具（数组，每项{id, countMin, countMax, chance}）
+
+    statMod       属性修正（生成后叠加）
+                  如 { MagicLevel:10, atk:-3 } 表示魔力等级+10但攻击-3
+
+    spellCount    从spellPool中选几个（{min,max}），缺省{min:1,max:2}
+    formationCount 从formationPool中选几个，缺省{min:0,max:1}
+    skillCount    从skillPool中选几个，缺省{min:0,max:2}
+*/
+
+<<set $JobTagLibrary = {
+
+    /* ===== 战斗职业 ===== */
+
+    "施法者": {
+        name: "施法者",
+        category: "combat",
+        spellPool: ["damage","freeze","heal","meteor","bless","triple","chainsplit","icelock"],
+        formationPool: ["DivineProtection","FrostField","GravityBind"],
+        skillPool: [],
+        weaponPool: ["staff"],
+        itemPool: [
+            { id:"damageStone", countMin:1, countMax:2, chance:0.3 }
+        ],
+        statMod: { MagicLevel:10, maxMP:50 },
+        spellCount: { min:2, max:4 },
+        formationCount: { min:0, max:1 },
+        skillCount: { min:0, max:0 }
+    },
+
+    "剑士": {
+        name: "剑士",
+        category: "combat",
+        spellPool: [],
+        formationPool: [],
+        skillPool: ["doubleStrike","sweep","thrust","guard"],
+        weaponPool: ["shortSword","greatSword"],
+        itemPool: [
+            { id:"healPotion", countMin:1, countMax:2, chance:0.5 }
+        ],
+        statMod: { atk:3, SpeedLevel:5 },
+        spellCount: { min:0, max:0 },
+        formationCount: { min:0, max:0 },
+        skillCount: { min:1, max:3 }
+    },
+
+    "弓手": {
+        name: "弓手",
+        category: "combat",
+        spellPool: [],
+        formationPool: [],
+        skillPool: [],
+        weaponPool: ["shortBow","longBow"],
+        itemPool: [],
+        statMod: { SpeedLevel:5, initiative:3 },
+        spellCount: { min:0, max:0 },
+        formationCount: { min:0, max:0 },
+        skillCount: { min:0, max:0 }
+    },
+
+    "治疗师": {
+        name: "治疗师",
+        category: "combat",
+        spellPool: ["heal","bless","revive"],
+        formationPool: ["DivineProtection"],
+        skillPool: ["firstAid"],
+        weaponPool: ["staff"],
+        itemPool: [
+            { id:"healPotion", countMin:2, countMax:4, chance:0.8 }
+        ],
+        statMod: { MagicLevel:5, maxMP:30 },
+        spellCount: { min:1, max:3 },
+        formationCount: { min:0, max:1 },
+        skillCount: { min:0, max:1 }
+    },
+
+    "游侠": {
+        name: "游侠",
+        category: "combat",
+        spellPool: [],
+        formationPool: [],
+        skillPool: ["doubleStrike","thrust","climb"],
+        weaponPool: ["shortSword","shortBow"],
+        itemPool: [
+            { id:"smokeBomb", countMin:1, countMax:2, chance:0.4 },
+            { id:"healPotion", countMin:1, countMax:1, chance:0.3 }
+        ],
+        statMod: { SpeedLevel:5, initiative:5 },
+        spellCount: { min:0, max:0 },
+        formationCount: { min:0, max:0 },
+        skillCount: { min:1, max:2 }
+    },
+
+    "盗贼": {
+        name: "盗贼",
+        category: "combat",
+        spellPool: [],
+        formationPool: [],
+        skillPool: ["doubleStrike","climb"],
+        weaponPool: ["shortSword"],
+        itemPool: [
+            { id:"smokeBomb", countMin:1, countMax:3, chance:0.6 },
+            { id:"poisonVial", countMin:1, countMax:2, chance:0.4 }
+        ],
+        statMod: { SpeedLevel:10, initiative:5, atk:-2 },
+        spellCount: { min:0, max:0 },
+        formationCount: { min:0, max:0 },
+        skillCount: { min:1, max:2 }
+    },
+
+    "战术家": {
+        name: "战术家",
+        category: "combat",
+        spellPool: ["bless"],
+        formationPool: ["GravityBind"],
+        skillPool: ["guard"],
+        weaponPool: ["shortSword","greatSword"],
+        itemPool: [
+            { id:"smokeBomb", countMin:1, countMax:1, chance:0.3 }
+        ],
+        statMod: { initiative:8 },
+        spellCount: { min:0, max:1 },
+        formationCount: { min:0, max:1 },
+        skillCount: { min:0, max:1 }
+    },
+
+    /* ===== 技艺/商业职业 ===== */
+
+    "炼金术师": {
+        name: "炼金术师",
+        category: "trade",
+        spellPool: [],
+        formationPool: [],
+        skillPool: [],
+        weaponPool: ["staff"],
+        itemPool: [
+            { id:"healPotion", countMin:2, countMax:5, chance:0.9 },
+            { id:"fireBomb", countMin:1, countMax:3, chance:0.7 },
+            { id:"poisonVial", countMin:1, countMax:2, chance:0.5 },
+            { id:"smokeBomb", countMin:1, countMax:2, chance:0.4 }
+        ],
+        statMod: {},
+        spellCount: { min:0, max:0 },
+        formationCount: { min:0, max:0 },
+        skillCount: { min:0, max:0 }
+    },
+
+    "铁匠": {
+        name: "铁匠",
+        category: "trade",
+        spellPool: [],
+        formationPool: [],
+        skillPool: ["guard"],
+        weaponPool: ["greatSword","club"],
+        itemPool: [],
+        statMod: { atk:5 },
+        spellCount: { min:0, max:0 },
+        formationCount: { min:0, max:0 },
+        skillCount: { min:0, max:1 }
+    },
+
+    "商人": {
+        name: "商人",
+        category: "trade",
+        spellPool: [],
+        formationPool: [],
+        skillPool: [],
+        weaponPool: ["shortSword"],
+        itemPool: [
+            { id:"healPotion", countMin:3, countMax:6, chance:1.0 },
+            { id:"fireBomb", countMin:1, countMax:2, chance:0.3 },
+            { id:"smokeBomb", countMin:1, countMax:2, chance:0.5 }
+        ],
+        statMod: {},
+        spellCount: { min:0, max:0 },
+        formationCount: { min:0, max:0 },
+        skillCount: { min:0, max:0 }
+    },
+
+    "药剂师": {
+        name: "药剂师",
+        category: "trade",
+        spellPool: ["heal"],
+        formationPool: [],
+        skillPool: ["firstAid"],
+        weaponPool: ["staff"],
+        itemPool: [
+            { id:"healPotion", countMin:3, countMax:6, chance:1.0 },
+            { id:"poisonVial", countMin:1, countMax:3, chance:0.6 }
+        ],
+        statMod: { MagicLevel:3 },
+        spellCount: { min:0, max:1 },
+        formationCount: { min:0, max:0 },
+        skillCount: { min:0, max:1 }
+    },
+
+    /* ===== 社交/知识职业 ===== */
+
+    "学者": {
+        name: "学者",
+        category: "social",
+        spellPool: ["damage","freeze","heal"],
+        formationPool: [],
+        skillPool: [],
+        weaponPool: ["staff"],
+        itemPool: [
+            { id:"damageStone", countMin:1, countMax:1, chance:0.3 }
+        ],
+        statMod: { MagicLevel:5 },
+        spellCount: { min:1, max:2 },
+        formationCount: { min:0, max:0 },
+        skillCount: { min:0, max:0 }
+    },
+
+    "吟游诗人": {
+        name: "吟游诗人",
+        category: "social",
+        spellPool: ["bless","heal"],
+        formationPool: [],
+        skillPool: [],
+        weaponPool: ["shortSword"],
+        itemPool: [],
+        statMod: { initiative:3 },
+        spellCount: { min:0, max:2 },
+        formationCount: { min:0, max:0 },
+        skillCount: { min:0, max:0 }
+    },
+
+    "演说家": {
+        name: "演说家",
+        category: "social",
+        spellPool: [],
+        formationPool: [],
+        skillPool: [],
+        weaponPool: [],
+        itemPool: [],
+        statMod: {},
+        spellCount: { min:0, max:0 },
+        formationCount: { min:0, max:0 },
+        skillCount: { min:0, max:0 }
+    }
+
+}>>
+

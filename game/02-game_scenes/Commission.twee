@@ -1,0 +1,157 @@
+:: Commission Execute [nobr]
+<<if $ActiveCommission === -1>>
+  你没有接取委托。<br>
+  <<link "返回">><<goto $return>><</link>>
+<<else>>
+  <<set _ceComm = $CommissionBoard[$ActiveCommission]>>
+  <<set _ceStep = 0>>
+  <<if $CommissionStep !== undefined>>
+    <<set _ceStep = $CommissionStep>>
+  <<else>>
+    <<set $CommissionStep = 0>>
+  <</if>>
+
+  /* 获取模板 */
+  <<set _ceTplArr = $CommissionTemplateLibrary[_ceComm.typeTag]>>
+  <<if not _ceTplArr || _ceTplArr.length === 0>>
+    /* 无模板，直接战斗 */
+    你在这里发现了目标。<br>
+    <<link "战斗">>
+      <<set $CommissionStep = 0>>
+      <<startCommissionBattle _ceComm>>
+    <</link>><br>
+    <<link "返回">><<set $CommissionStep = 0>><<goto $return>><</link>>
+  <<else>>
+    <<set _ceTpl = _ceTplArr[_ceComm.templateIndex % _ceTplArr.length]>>
+
+    /* 步骤0：显示intro */
+    <<if _ceStep === 0>>
+      <<= _ceTpl.intro>><br><br>
+    <</if>>
+
+    /* 显示当前步骤 */
+    <<if _ceStep < _ceTpl.steps.length>>
+      <<set _ceStepData = _ceTpl.steps[_ceStep]>>
+      <<= _ceStepData.text>><br><br>
+
+      /* 显示选项 */
+      <<for _ceC = 0; _ceC < _ceStepData.choices.length; _ceC++>>
+        <<set _ceChoice = _ceStepData.choices[_ceC]>>
+        <<capture _ceChoice, _ceStep>>
+          <<link _ceChoice.label>>
+            <<if _ceChoice.result === "continue">>
+              /* 进入下一步 */
+              <<set $CommissionStep = _ceStep + 1>>
+              <<goto "Commission Execute">>
+
+            <<elseif _ceChoice.result === "fight">>
+              /* 直接进入战斗 */
+              <<set $CommissionStep = 0>>
+              <<set $CommissionPreFightText = _ceChoice.text || "">>
+              <<goto "Commission Pre Fight">>
+
+            <<elseif _ceChoice.result === "bonus">>
+              /* 获得buff后进入战斗 */
+              <<set $CommissionStep = 0>>
+              <<set $CommissionPreFightText = _ceChoice.text || "">>
+              <<set $CommissionBonusBuff = true>>
+              <<goto "Commission Pre Fight">>
+
+            <<elseif _ceChoice.result === "retreat">>
+              /* 放弃本次尝试，回到地点 */
+              <<set $CommissionStep = 0>>
+              <<goto $return>>
+            <</if>>
+          <</link>>
+        <</capture>>
+        <br>
+      <</for>>
+
+    <<else>>
+      /* 步骤用完了但没触发fight（安全兜底） */
+      <<= _ceTpl.preFightText>><br>
+      <<link "战斗">>
+        <<set $CommissionStep = 0>>
+        <<startCommissionBattle _ceComm>>
+      <</link>><br>
+    <</if>>
+  <</if>>
+<</if>>
+
+
+:: Commission Pre Fight [nobr]
+<<set _cpfComm = $CommissionBoard[$ActiveCommission]>>
+<<set _cpfTplArr = $CommissionTemplateLibrary[_cpfComm.typeTag]>>
+<<set _cpfTpl = _cpfTplArr[_cpfComm.templateIndex % _cpfTplArr.length]>>
+
+<<if $CommissionPreFightText && $CommissionPreFightText !== "">>
+  <<= $CommissionPreFightText>><br><br>
+<</if>>
+
+<<= _cpfTpl.preFightText>>
+<<= _cpfComm.totalEnemies>>个敌人正等着你。<br><br>
+
+<<if $CommissionBonusBuff>>
+  <em>你获得了先手优势——战斗开始时你的先攻将获得提升。</em><br><br>
+<</if>>
+
+<<link "开战！">>
+  <<set $CommissionPreFightText = "">>
+  <<startCommissionBattle _cpfComm>>
+<</link>>
+
+<br>
+<<link "返回准备">>
+  <<set $CommissionBonusBuff = false>>
+  <<set $CommissionPreFightText = "">>
+  <<goto $return>>
+<</link>>
+
+
+
+:: Commission Battle Win [nobr]
+<h2>委托战斗胜利！</h2>
+
+<<set _cbwComm = $CommissionBoard[$ActiveCommission]>>
+
+战斗经验：<<= $BattleResult.expGained>><br>
+
+<<grantCommissionRewards _cbwComm>>
+委托奖励：经验+<<= _cbwComm.expReward>>　金币+<<= _cbwComm.goldReward>>　声望+<<= _cbwComm.repReward>><br>
+
+<<set _cbwComm.status = "completed">>
+<<set $ActiveCommission = -1>>
+
+<<updateAdventurerRank>>
+当前称号：<strong><<= $AdventurerRank>></strong>（声望 <<= $AdventurerRep>>）<br>
+
+<<set $Units = []>>
+<hr>
+
+/* ★战利品展示 */
+<<include "Loot Display">>
+
+<<link "继续">><<goto $return>><</link>>
+
+
+
+:: Commission Battle Lose [nobr]
+<h2>委托战斗失败……</h2>
+你没能完成委托。委托仍然保留，你可以再次尝试。<br>
+
+<<set $Units = []>>
+<hr>
+<<link "继续">><<goto $return>><</link>>
+
+
+:: Commission Battle Flee [nobr]
+<<if $BattleExitReason === "teleport">>
+  <h2>你通过传送离开了战场</h2>
+<<else>>
+  <h2>你逃离了战斗</h2>
+<</if>>
+委托仍然保留，你可以再次尝试。<br>
+
+<<set $Units = []>>
+<hr>
+<<link "继续">><<goto $return>><</link>>

@@ -48,3 +48,9 @@
 <<set $PlaceholderEnemy = false>>
 
 <<set $CheatUseFixedMap = "">>
+
+<<set $CombatRules = { canFlee:true, lethalOverride:null }>>
+
+<<set $BattleLoot = []>>          /* 战利品池：[{id:"fireBomb", count:2}, ...] */
+<<set $BattleLootDay = -1>>       /* 战利品产生的日期($day)，用于过期清扫 */
+<<set $LootExpireDays = 3>>       /* 战利品过期天数，超过则自动清空 */

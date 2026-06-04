@@ -16,9 +16,15 @@ atk<<= $Player.atk>>　MagicLv<<= $Player.MagicLevel>>　SpeedLv<<= $Player.Spee
   <</for>>
 <</if>><br>
 武器：<<= $Player.weapon ? $Player.weapon.name : "无">><br>
+职业标签：
+<<if $Player.jobTags && $Player.jobTags.length > 0>>
+  <<= $Player.jobTags.join("、")>>
+<<else>>无<</if>><br>
+
 <hr>
 <<link "改属性">><<goto "Cheat Stats">><</link>><br>
 <<link "改等级/经验">><<goto "Cheat Level">><</link>><br>
+<<link "管理技艺">><<goto "Cheat Craft">><</link>><br>
 <<link "管理剑技">><<goto "Cheat Skill">><</link>><br>
 <<link "管理法术">><<goto "Cheat Spell">><</link>><br>
 <<link "管理法阵">><<goto "Cheat Formation">><</link>><br>
@@ -290,7 +296,8 @@ atk<<= $Player.atk>>　MagicLv<<= $Player.MagicLevel>>　SpeedLv<<= $Player.Spee
   已习得：
   <<if $Player.skill.length === 0>>无<<else>>
     <<for _csk = 0; _csk < $Player.skill.length; _csk++>>
-      <<= $SkillLibrary[$Player.skill[_csk]].name>><<if _csk < $Player.skill.length - 1>>、<</if>>
+      <<= $SkillLibrary[_cskK].name>> <span style="opacity:0.4;font-size:0.8em"><<= _cskK>></span>
+      <<if _csk < $Player.skill.length - 1>>、<</if>>
     <</for>>
   <</if>><br><hr>
   <<set _cskKeys = Object.keys($SkillLibrary)>>
@@ -314,6 +321,24 @@ atk<<= $Player.atk>>　MagicLv<<= $Player.MagicLevel>>　SpeedLv<<= $Player.Spee
 
 :: Cheat Battle Setup [nobr noreturn]
 <h3>测试战斗</h3>
+
+<<if $CombatLibrary>>
+  <<set _clKeys = Object.keys($CombatLibrary)>>
+  <<if _clKeys.length > 0>>
+    <br><strong>库中预设战斗：</strong><br>
+    <<for _clI = 0; _clI < _clKeys.length; _clI++>>
+      <<set _clK = _clKeys[_clI]>>
+      <<set _clName = $CombatLibrary[_clK].name || _clK>>
+      <<capture _clK, _clName>>
+        <<link _clName>>
+          <<startCombat $CombatLibrary[_clK]>>
+        <</link>>
+      <</capture>>
+      <br>
+    <</for>>
+  <</if>>
+<</if>>
+<br>
 
 当前地形：<strong><<= $CheatTerrain>></strong><br>
 <<set _terrains = [["plain","平原"],["mountain","山地"],["volcano","火山"],["river","河流"],["forest","森林"],["lowland","洼地"],["slope","山坡"],["plateau","高台地"],["basin","壶口"]]>>
@@ -366,4 +391,75 @@ atk<<= $Player.atk>>　MagicLv<<= $Player.MagicLevel>>　SpeedLv<<= $Player.Spee
 <</link>><br>
 
 <hr>
+<<link "返回">><<goto "Cheat Menu">><</link>>
+
+
+
+:: Cheat Craft [nobr noreturn]
+<h3>技艺</h3>
+
+当前技艺等级：<br>
+<<set _ccKeys = Object.keys($CraftLibrary)>>
+<<for _ccI = 0; _ccI < _ccKeys.length; _ccI++>>
+  <<set _ccKey = _ccKeys[_ccI]>>
+  <<set _ccDef = $CraftLibrary[_ccKey]>>
+  <<getCraftLevel $Player _ccKey>>
+  <<= _ccDef.name>>：Lv<<= _craftLevel>>
+  <<if $Player.crafts && $Player.crafts[_ccKey]>>
+    <<craftExpNeeded _ccKey _craftLevel>>
+    （经验 <<= $Player.crafts[_ccKey].exp>> / <<= _craftExpNeed>>）
+  <</if>>
+  <<capture _ccKey>>
+    <<link "+10经验">>
+      <<gainCraftExp $Player _ccKey 10>>
+      <<goto "Cheat Craft">>
+    <</link>>
+    <<link "+100经验">>
+      <<gainCraftExp $Player _ccKey 100>>
+      <<goto "Cheat Craft">>
+    <</link>>
+    <<link "+1000经验">>
+      <<gainCraftExp $Player _ccKey 1000>>
+      <<goto "Cheat Craft">>
+    <</link>>
+  <</capture>>
+  <br>
+<</for>>
+
+<hr>
+<strong>已解锁能力：</strong>
+<<if $Player.craftAbilities && $Player.craftAbilities.length > 0>>
+  <<for _ccA = 0; _ccA < $Player.craftAbilities.length; _ccA++>>
+    <<lookupName $Player.craftAbilities[_ccA]>><<= _lookedUpName>><<if _ccA < $Player.craftAbilities.length - 1>>、<</if>>
+  <</for>>
+<<else>>无<</if>><br>
+
+<strong>已解锁配方：</strong>
+<<if $Player.craftRecipes && $Player.craftRecipes.length > 0>>
+  <<for _ccR = 0; _ccR < $Player.craftRecipes.length; _ccR++>>
+    <<lookupName $Player.craftRecipes[_ccR]>><<= _lookedUpName>><<if _ccR < $Player.craftRecipes.length - 1>>、<</if>>
+  <</for>>
+<<else>>无<</if>><br>
+
+<strong>职业标签：</strong>
+<<if $Player.jobTags && $Player.jobTags.length > 0>>
+  <<= $Player.jobTags.join("、")>>
+<<else>>无<</if>><br>
+
+<strong>被动加值：</strong>
+<<if $Player.craftBonuses>>
+  <<set _cbKeys = Object.keys($Player.craftBonuses)>>
+  <<if _cbKeys.length > 0>>
+    <<set _ccStatNames = { maxHP:"生命上限", maxMP:"魔力上限", atk:"攻击", MagicLevel:"魔力等级", SpeedLevel:"速度等级", initiative:"先攻", healPower:"治疗效果" }>>
+    <<for _cbI = 0; _cbI < _cbKeys.length; _cbI++>>
+      <<set _cbKey = _cbKeys[_cbI]>>
+      <<set _cbDisp = _ccStatNames[_cbKey] || _cbKey>>
+      <<= _cbDisp>>+<<= $Player.craftBonuses[_cbKey]>>
+      <<if _cbI < _cbKeys.length - 1>>、<</if>>
+    <</for>>
+  <<else>>无<</if>>
+<<else>>无<</if>><br>
+
+<hr>
+<<link "重新同步所有解锁">><<syncCraftUnlocks $Player>><<goto "Cheat Craft">><</link>><br>
 <<link "返回">><<goto "Cheat Menu">><</link>>

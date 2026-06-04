@@ -12,6 +12,12 @@
 <</for>>
 
 
+<<set $minute += 1>>
 <<timeWidget>>
 
+<<checkLootExpire>>
+
 <<if not tags().includes('noreturn')>><<set $return to passage()>><</if>>
+
+/* 自动职业tag检查 */
+<<checkAutoJobTags $Player>>

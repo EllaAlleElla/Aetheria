@@ -1,3 +1,74 @@
 :: Game Base
 <<set $nsfwEnd = "">>/* nsfw段结束后转到何处 */
 <<set $return = "">>/* 当前游戏进度 */
+
+<<set $day = 1>>
+<<set $hour = 8>>
+<<set $minute = 0>>
+<<set $month = 1>>
+<<set $year = 1>>
+
+
+/* 特殊npc数组, 数据都存在各自的独立passage里 */
+<<set $PersistNPC = {}>>
+
+
+
+/*
+  $SceneJobTagRules：场景→职业tag分配规则。
+  key = 场景tag（传入generateEnemyFromTags时可包含的标签）
+
+  每个规则：
+    required      必须至少有一个的职业tag类别数组（从该类别的tag里随机选1个）
+    optional      可能额外附加的，{category, chance}（roll概率后从该类别选1个）
+    specificTags  直接指定的tag数组（100%附加）
+*/
+
+<<set $SceneJobTagRules = {
+
+    "野外": {
+        required: ["combat"],
+        optional: [
+            { category:"combat", chance:0.3 }
+        ],
+        specificTags: []
+    },
+
+    "集市": {
+        required: ["trade"],
+        optional: [
+            { category:"social", chance:0.3 },
+            { category:"combat", chance:0.1 }
+        ],
+        specificTags: []
+    },
+
+    "街道": {
+        required: [],
+        optional: [
+            { category:"combat", chance:0.4 },
+            { category:"trade", chance:0.3 },
+            { category:"social", chance:0.3 }
+        ],
+        specificTags: []
+    },
+
+    "酒馆": {
+        required: [],
+        optional: [
+            { category:"combat", chance:0.5 },
+            { category:"trade", chance:0.2 },
+            { category:"social", chance:0.4 }
+        ],
+        specificTags: []
+    },
+
+    "地下城": {
+        required: ["combat"],
+        optional: [
+            { category:"combat", chance:0.5 }
+        ],
+        specificTags: []
+    }
+
+}>>

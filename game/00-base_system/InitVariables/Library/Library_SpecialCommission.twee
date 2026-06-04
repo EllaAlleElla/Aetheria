@@ -1,0 +1,178 @@
+:: Library-SpecialCommission
+
+/*
+  $SpecialCommissionLibrary：特殊委托库。
+
+  每个条目是一个特殊委托的"蓝图"，生成时会复制到$CommissionBoard。
+
+  字段说明：
+    id            唯一标识（字符串）
+    name          委托名称（显示用）
+    tier          评级（"D"/"C"/"B"/"A"/"S"/"EX"）
+    region        所属地区（需匹配$CurrentRegion才会出现）
+    description   委托板上的描述文字
+
+    hasDeadline   是否有时限（布尔）
+    deadlineDays  时限天数（从首次刷新开始算）
+    firstSeenDay  首次被刷新出来的日期（运行时填入，初始为-1）
+    expired       是否已过期（运行时填入，初始为false）
+
+    followUpId    过期后替代的特殊委托id（可选，你提到的"过时限差分"）
+                  如果填了，原委托过期后，followUp会加入池中。
+
+    locationKey   绑定的地点库key（可选，不填则用通用模板）
+    passage       委托专属passage名（不走Commission Execute通用流程）
+                  如果填了，接取后前往地点时显示的链接直接跳转到这个passage。
+
+    battleConfig  战斗配置，格式同$CombatLibrary的条目（可选）
+                  如果填了，用这个配置发起战斗而不是根据enemyGroups生成。
+                  如果不填，则仍然按tier生成随机敌人。
+
+    loot          特殊掉落数组（可选），如[{id:"fireEnchantSword", count:1, chance:0.5}]
+                  chance=掉落概率，战斗胜利时额外roll。
+
+    expReward     经验奖励（覆盖自动计算）
+    goldReward    金币奖励
+    repReward     声望奖励
+
+    completed     是否已完成（运行时，初始false）
+    repeatable    是否可重复接取（布尔，缺省false）
+*/
+
+<<set $SpecialCommissionLibrary = {
+
+    /* ===== 示例：D级特殊委托 ===== */
+    forest_guardian: {
+        id: "forest_guardian",
+        name: "林中守护者",
+        tier: "D",
+        region: "Valentia",
+        description: "有人在北部密林深处看到了一个不寻常的身影。据说它守护着一棵古树。",
+
+        hasDeadline: false,
+        deadlineDays: 0,
+        firstSeenDay: -1,
+        expired: false,
+        followUpId: null,
+
+        locationKey: "valentia_north_forest",
+        passage: "Special-Forest Guardian",
+
+        battleConfig: {
+            mapMode: "generate",
+            mapTags: ["forest"],
+            enemies: [
+                { source:"custom", data:{
+                    name:"树精", category:"monster", traits:[],
+                    maxHP:80, maxMP:30, MagicLevel:5, SpeedLevel:25,
+                    atk:8, initiative:10, level:8,
+                    spell:["heal"],
+                    weapon:{ name:"藤鞭", wtype:"club", damageType:"physical", element:"none", baseValue:10, scaling:"atk", range:1, speedCost:10 },
+                    items:[{id:"healPotion", count:2}]
+                }}
+            ],
+            rules: { canFlee:true }
+        },
+
+        loot: [
+            { id:"healPotion", count:3, chance:1.0 }
+        ],
+
+        expReward: 50,
+        goldReward: 30,
+        repReward: 15,
+        completed: false,
+        repeatable: false
+    },
+
+    /* ===== 示例：B级有时限的特殊委托 ===== */
+    volcano_beast: {
+        id: "volcano_beast",
+        name: "火山异兽",
+        tier: "B",
+        region: "Valentia",
+        description: "火山洞窟深处出现了一头散发着灼热气息的异兽。必须在它离开洞窟之前将其消灭。",
+
+        hasDeadline: true,
+        deadlineDays: 14,
+        firstSeenDay: -1,
+        expired: false,
+        followUpId: "volcano_beast_escaped",
+
+        locationKey: "valentia_volcano_cave",
+        passage: "Special-Volcano Beast",
+
+        battleConfig: {
+            mapMode: "generate",
+            mapTags: ["volcano"],
+            enemies: [
+                { source:"custom", data:{
+                    name:"熔岩兽", category:"monster", traits:[],
+                    special: [],
+                    maxHP:300, maxMP:100, MagicLevel:15, SpeedLevel:35,
+                    atk:20, initiative:12, level:28,
+                    res:{ physical:10, magical:0, fire:50, ice:-30 },
+                    spell:["meteor"],
+                    weapon:{ name:"岩爪", wtype:"claw", damageType:"physical", element:"fire", baseValue:25, scaling:"atk", range:1, speedCost:15 },
+                    items:[{id:"fireBomb", count:3}]
+                }}
+            ],
+            rules: { canFlee:true }
+        },
+
+        loot: [
+            { id:"fireBomb", count:5, chance:1.0 }
+        ],
+
+        expReward: 300,
+        goldReward: 200,
+        repReward: 60,
+        completed: false,
+        repeatable: false
+    },
+
+    /* ===== 示例：上面那个委托过期后的替代版 ===== */
+    volcano_beast_escaped: {
+        id: "volcano_beast_escaped",
+        name: "逃逸的火山异兽",
+        tier: "B",
+        region: "Valentia",
+        description: "那头火山异兽已经离开了洞窟，现在在南城郊外游荡。情况变得更加危险了。",
+
+        hasDeadline: false,
+        deadlineDays: 0,
+        firstSeenDay: -1,
+        expired: false,
+        followUpId: null,
+
+        locationKey: "valentia_south_suburb",
+        passage: "Special-Volcano Beast Escaped",
+
+        battleConfig: {
+            mapMode: "generate",
+            mapTags: ["plain"],
+            enemies: [
+                { source:"custom", data:{
+                    name:"暴走熔岩兽", category:"monster", traits:[],
+                    special: [],
+                    maxHP:400, maxMP:150, MagicLevel:20, SpeedLevel:40,
+                    atk:25, initiative:15, level:32,
+                    res:{ physical:10, magical:0, fire:50, ice:-30 },
+                    spell:["meteor","damage"],
+                    weapon:{ name:"岩爪", wtype:"claw", damageType:"physical", element:"fire", baseValue:30, scaling:"atk", range:1, speedCost:15 },
+                    items:[]
+                }}
+            ],
+            rules: { canFlee:true }
+        },
+
+        loot: [],
+
+        expReward: 400,
+        goldReward: 150,
+        repReward: 80,
+        completed: false,
+        repeatable: false
+    }
+
+}>>

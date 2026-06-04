@@ -12,6 +12,23 @@
 7- [[Battle Start Test1]]
 8- [[Battle Start Test2]]
 9- [[Enemy Gen Test]]
+10- [[Start Combat Test1]]
+11- [[Start Combat Test2]]
+
+委托:
+委托系统:
+<<link "设置地区为Valentia并打开委托板">>
+  <<set $CurrentRegion = "Valentia">>
+  <<goto "Commission Board">>
+<</link>>
+
+快捷跳转地点:
+[[Valentia-North Forest]]
+[[Valentia-Volcano Cave]]
+[[Valentia-Mountain Path]]
+[[Valentia-Dark Alley]]
+[[Valentia-South Suburb]]
+[[Valentia-East Field]]
 
 
 :: Battle Data Test [nobr]
@@ -474,3 +491,290 @@ u3 HP(预期55-13=42)：<<findUnit "u3">><<= _foundUnit.RemainHP>><br>
 <<placeUnitsOnGrid>>
 <<set $BattleWin = "Cheat Menu">><<set $BattleLose = "Cheat Menu">><<set $BattleFlee = "Cheat Menu">>
 <<link "进入战斗">><<goto "Battle">><</link>>
+
+
+:: Start Combat Test1 [noreturn]
+你被伏击了！
+<<link "战斗！">>
+    <<set _combatCfg = {
+        name: "伏击战",
+        mapMode: "generate", mapTags: ["mountain"],
+        enemies: [{ source:"species", tags:["monster","低级"] }],
+        onWin: "胜利", onLose: "失败",
+        rules: { canFlee: true }
+    }>>
+    <<startCombat _combatCfg>>
+<</link>>
+
+
+:: Start Combat Test2 [noreturn]
+<<link "开始测试">>
+  <<startCombat $CombatLibrary.StartCombatTest2>>
+<</link>>
+
+
+:: Commission Battle Test [nobr noreturn]
+<<if $ActiveCommission === -1 || $ActiveCommission === undefined>>
+  你还没有接取任何委托。<br>
+  <<link "去委托板">><<goto "Commission Board">><</link>>
+<<else>>
+  <<set _cbtComm = $CommissionBoard[$ActiveCommission]>>
+
+  接取的委托：【<<= _cbtComm.tier>>级】<<= _cbtComm.description>><br>
+  敌人数量：<<= _cbtComm.totalEnemies>>　等级：<<= _cbtComm.enemyGroups[0].lvMin>>~<<= _cbtComm.enemyGroups[0].lvMax>><br>
+  <hr>
+  <<link "开始委托战斗">>
+    /* 初始化战斗 */
+    <<set $Units = []>>
+    <<set $UnitIdCounter = 0>>
+    <<set $ActionLog = "">>
+    <<set $BattleTurnLog = "">>
+    <<set $ActiveActorId = "">>
+    <<set $PendingSpell = "">><<set $PendingFormation = "">><<set $PendingItem = "">><<set $PendingSkill = "">>
+    <<set $CastLevelChoice = 1>><<set $AttackHeavy = 0>>
+    <<set $BattleResult = { defeated:[], expGained:0 }>>
+    <<set $Field = { buff:[], triggers:[], tick:0, round:1, grid:null }>>
+
+    /* 确保玩家有基础战斗能力 */
+    <<if not $Player.weapon>>
+      <<set $Player.weapon = clone($WeaponLibrary.shortSword)>>
+    <</if>>
+    <<if $Player.spell.length === 0>>
+      <<set $Player.spell = ["damage","freeze","heal"]>>
+    <</if>>
+    <<set $Player.RemainHP = $Player.maxHP>>
+    <<set $Player.RemainMP = $Player.maxMP>>
+    <<set $Player.status = "alive">>
+
+    /* 玩家入场 */
+    <<enlistUnit $Player "ally" true>>
+
+    /* 生成委托敌人 */
+    <<spawnCommissionEnemies _cbtComm>>
+
+    /* 生成地图 + 摆位 */
+    <<generateGrid `["plain"]`>>
+    <<placeUnitsOnGrid>>
+
+    /* 设置战斗结果跳转 */
+    <<set $BattleWin = "Commission Win">>
+    <<set $BattleLose = "Commission Lose">>
+    <<set $BattleFlee = "Commission Flee">>
+
+    <<goto "Battle">>
+  <</link>>
+  <br>
+  <<link "返回">><<goto "Test Entrance">><</link>>
+<</if>>
+
+
+:: Commission Win [nobr]
+<h2>委托完成！</h2>
+获得经验：<<= $BattleResult.expGained>><br>
+<<if $ActiveCommission !== -1>>
+  委托奖励经验：<<= $CommissionBoard[$ActiveCommission].expReward>><br>
+  <<set $Player.exp += $CommissionBoard[$ActiveCommission].expReward>>
+  <<set $CommissionBoard[$ActiveCommission].status = "completed">>
+  <<set $ActiveCommission = -1>>
+<</if>>
+当前等级：<<= $Player.level>>　经验：<<= $Player.exp>><br>
+<<set $Units = []>>
+<<link "继续">><<goto "Test Entrance">><</link>>
+
+
+:: Commission Lose [nobr]
+<h2>委托失败……</h2>
+<<set $ActiveCommission = -1>>
+<<set $Units = []>>
+<<link "继续">><<goto "Test Entrance">><</link>>
+
+
+:: Commission Flee [nobr]
+<h2>你逃离了战斗</h2>
+委托仍然保留，你可以再次挑战。<br>
+<<set $Units = []>>
+<<link "继续">><<goto "Test Entrance">><</link>>
+
+
+:: Valentia-North Forest
+你来到了北部密林。参天大树遮蔽了阳光，林间小路蜿蜒前行。
+
+<<hasCommissionHere>>
+<<if _hasCommHere>>
+  <hr>
+  <span style="color:#ff0">【委托】你的目标就在附近。</span><br>
+  <<set _hcComm = $CommissionBoard[$ActiveCommission]>>
+  <<if _hcComm.isSpecial && _hcComm.specialPassage>>
+    <<link "执行委托">><<goto _hcComm.specialPassage>><</link>><br>
+  <<else>>
+    <<link "执行委托">><<goto "Commission Execute">><</link>><br>
+  <</if>>
+<</if>>
+
+<<link "返回">><<goto "Test Entrance">><</link>>
+
+
+:: Valentia-East Field
+东郊的田野一望无际。微风拂过麦浪，远处是连绵的丘陵。
+
+<<hasCommissionHere>>
+<<if _hasCommHere>>
+  <hr>
+  <span style="color:#ff0">【委托】你的目标就在附近。</span><br>
+  <<set _hcComm = $CommissionBoard[$ActiveCommission]>>
+  <<if _hcComm.isSpecial && _hcComm.specialPassage>>
+    <<link "执行委托">><<goto _hcComm.specialPassage>><</link>><br>
+  <<else>>
+    <<link "执行委托">><<goto "Commission Execute">><</link>><br>
+  <</if>>
+<</if>>
+
+<<link "返回">><<goto "Test Entrance">><</link>>
+
+
+:: Valentia-South Suburb
+城南郊外，几栋农舍散落在道路两旁。空气中弥漫着柴火的气味。
+
+<<hasCommissionHere>>
+<<if _hasCommHere>>
+  <hr>
+  <span style="color:#ff0">【委托】你的目标就在附近。</span><br>
+  <<set _hcComm = $CommissionBoard[$ActiveCommission]>>
+  <<if _hcComm.isSpecial && _hcComm.specialPassage>>
+    <<link "执行委托">><<goto _hcComm.specialPassage>><</link>><br>
+  <<else>>
+    <<link "执行委托">><<goto "Commission Execute">><</link>><br>
+  <</if>>
+<</if>>
+
+<<link "返回">><<goto "Test Entrance">><</link>>
+
+
+:: Valentia-Dark Alley
+阴暗的小巷弥漫着霉味。墙壁上有涂鸦，角落里有可疑的划痕。
+
+<<hasCommissionHere>>
+<<if _hasCommHere>>
+  <hr>
+  <span style="color:#ff0">【委托】你的目标就在附近。</span><br>
+  <<set _hcComm = $CommissionBoard[$ActiveCommission]>>
+  <<if _hcComm.isSpecial && _hcComm.specialPassage>>
+    <<link "执行委托">><<goto _hcComm.specialPassage>><</link>><br>
+  <<else>>
+    <<link "执行委托">><<goto "Commission Execute">><</link>><br>
+  <</if>>
+<</if>>
+
+<<link "返回">><<goto "Test Entrance">><</link>>
+
+
+:: Valentia-Mountain Path
+山间小路崎岖难行。云雾缭绕，你只能看清脚下几步远的路。
+
+<<hasCommissionHere>>
+<<if _hasCommHere>>
+  <hr>
+  <span style="color:#ff0">【委托】你的目标就在附近。</span><br>
+  <<set _hcComm = $CommissionBoard[$ActiveCommission]>>
+  <<if _hcComm.isSpecial && _hcComm.specialPassage>>
+    <<link "执行委托">><<goto _hcComm.specialPassage>><</link>><br>
+  <<else>>
+    <<link "执行委托">><<goto "Commission Execute">><</link>><br>
+  <</if>>
+<</if>>
+
+<<link "返回">><<goto "Test Entrance">><</link>>
+
+
+
+:: Valentia-Volcano Cave
+炽热的空气扑面而来。洞口闪烁着暗红色的光芒。
+
+/* 在每个地点passage里，把原来的执行委托链接改为这样 */
+<<hasCommissionHere>>
+<<if _hasCommHere>>
+  <hr>
+  <span style="color:#ff0">【委托】你的目标就在附近。</span><br>
+  <<set _hcComm = $CommissionBoard[$ActiveCommission]>>
+  <<if _hcComm.isSpecial && _hcComm.specialPassage>>
+    <<link "执行委托">><<goto _hcComm.specialPassage>><</link>><br>
+  <<else>>
+    <<link "执行委托">><<goto "Commission Execute">><</link>><br>
+  <</if>>
+<</if>>
+
+
+<<link "返回">><<goto "Test Entrance">><</link>>
+
+
+:: Special-Forest Guardian [nobr]
+<h2>林中守护者</h2>
+
+你走入北部密林深处。随着树木越来越密，光线越来越暗。
+
+一棵巨大的古树矗立在林间空地的中央。它的树干上缠绕着发光的藤蔓。
+
+在古树的根部，一个人形的身影正背对着你。它转过身来——那是一个由树木和藤蔓构成的生物，眼中闪烁着翠绿的光芒。
+
+它并不像是要主动攻击你的样子，但它挡住了你接近古树的路。
+
+<<link "尝试交涉（但你听不懂它的语言）">>
+  <<goto "Special-Forest Guardian Talk">>
+<</link>><br>
+<<link "直接战斗">>
+  <<startSpecialCommissionBattle>>
+<</link>><br>
+<<link "离开">>
+  <<goto $return>>
+<</link>>
+
+
+:: Special-Forest Guardian Talk [nobr]
+树精发出了一连串沙沙的声音，像风吹过树叶。你完全听不懂。
+
+它似乎在警告你不要靠近古树。当你试图向前一步时，它立刻摆出了战斗姿态。
+
+看来和平解决是不可能了。
+
+<<link "战斗">>
+  <<startSpecialCommissionBattle>>
+<</link>><br>
+<<link "离开">>
+  <<goto $return>>
+<</link>>
+
+
+:: Special-Volcano Beast [nobr]
+<h2>火山异兽</h2>
+
+炽热的空气几乎让你无法呼吸。你沿着洞窟深入，岩壁上流淌着橙红色的岩浆。
+
+在一个宽阔的洞室中央，你看到了它——一头体型巨大的兽类，浑身覆盖着发红的岩石甲壳。它正在岩浆池边休憩。
+
+你不确定它有没有注意到你。
+
+<<link "趁它不备发动攻击">>
+  <<set $CommissionBonusBuff = true>>
+  <<startSpecialCommissionBattle>>
+<</link>><br>
+<<link "正面迎战">>
+  <<startSpecialCommissionBattle>>
+<</link>><br>
+<<link "撤退">>
+  <<goto $return>>
+<</link>>
+
+
+:: Special-Volcano Beast Escaped [nobr]
+<h2>逃逸的火山异兽</h2>
+
+南城郊外的田野上，一片焦黑的土地标示着它经过的路径。
+
+那头熔岩兽正在远处一栋废弃谷仓旁徘徊。它看起来比在洞窟里更加暴躁——离开了熔岩环境让它变得不稳定。
+
+<<link "迎战">>
+  <<startSpecialCommissionBattle>>
+<</link>><br>
+<<link "撤退">>
+  <<goto $return>>
+<</link>>

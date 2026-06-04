@@ -1,0 +1,59 @@
+:: Library-Combat
+<<set $CombatLibrary = {
+    Sample: {
+        id: "sample",       // 唯一标识（库里用的key）
+        name: "示例",           // 显示名
+
+        // === 地图 ===
+        mapMode: "fixed",              // "fixed"(固定地图) / "generate"(随机生成) / "none"(无地图)
+        mapKey: "tutorial_arena",      // fixed时：$MapLibrary的key
+        mapTags: ["plain"],            // generate时：generateGrid的tag
+
+        // === 敌人 ===
+        enemies: [
+            // 三种来源，可混用：
+            { source:"species", tags:["monster","低级"] },                    // 按tag随机生成
+            { source:"npc", npcKey:"Edwin" },                                 // 导入特殊NPC
+            { source:"custom", data:{ name:"精锐卫兵", category:"humanlike",  // 自定义数据
+                maxHP:200, maxMP:50, atk:15, /* ...完整单位字段... */ } }
+        ],
+
+        // === 友方（可选，除玩家外的队友）===
+        allies: [
+            { source:"npc", npcKey:"Edwin", side:"ally" }
+        ],
+
+        // === 场地效果（可选）===
+        fieldBuffs: [
+            // 战斗开始时给$Field加的buff
+        ],
+        fieldTriggers: [
+            // 延时触发器（增援等）
+            { remaining:300, action:"spawn", payload:{ source:"species", tags:["monster","低级"] } }
+        ],
+
+        // === 战斗结束跳转 ===
+        onWin: "某剧情段落",
+        onLose: "某失败段落",
+        onFlee: "某逃跑段落",
+
+        // === 特殊规则（可选）===
+        rules: {
+            canFlee: true,             // 是否允许逃跑
+            lethalOverride: null       // null用全局设置，true/false强制
+        }
+    },
+
+}>>
+
+
+<<set $CombatLibrary.StartCombatTest2 = {
+    name: "训练场遭遇",
+    mapMode: "fixed", mapKey: "tutorial_arena",
+    enemies: [
+        { source:"custom", data:{ name:"训练木桩", category:"monster", traits:["immobile"], maxHP:100, maxMP:0, MagicLevel:0, SpeedLevel:10, atk:1, initiative:5, level:1 } }
+    ],
+    allies: [],
+    onWin: "训练完成", onLose: "训练失败",
+    rules: { canFlee:false }
+}>>

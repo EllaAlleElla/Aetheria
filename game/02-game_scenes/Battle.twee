@@ -271,7 +271,8 @@
       <</for>>
     <</if>>
 
-
+<br>
+<br>
     
 
 
@@ -292,22 +293,26 @@
       <<goto "Battle">>
     <</link>>
 
-    <<canFlee _actor>>
-    <<if _canFlee>>
-      <<link "逃跑">>
-        <<findUnit $ActiveActorId>><<set _a = _foundUnit>>
-        <<tryFlee _a>>
-        <<if _fleeFail>>
-          <<set $BattleTurnLog = $BattleTurnLog + $ActionLog + "\n">>
-          <<tickBuffs _a>>
-          <<consumeTurn _a>>
-          <<goto "Battle">>
-        <</if>>
-      <</link>>
+    <<if $CombatRules && $CombatRules.canFlee === false>>
+      <span style="opacity:0.5">逃跑（本场战斗无法逃跑）</span>
     <<else>>
-      <span style="opacity:0.5">逃跑（你无路可逃，需先移动到地图边缘）</span>
+      <<canFlee _actor>>
+      <<if _canFlee>>
+        <<link "逃跑">>
+          <<findUnit $ActiveActorId>><<set _a = _foundUnit>>
+          <<tryFlee _a>>
+          <<if _fleeFail>>
+            <<set $BattleTurnLog = $BattleTurnLog + $ActionLog + "\n">>
+            <<tickBuffs _a>>
+            <<consumeTurn _a>>
+            <<goto "Battle">>
+          <</if>>
+        <</link>>
+      <<else>>
+        <span style="opacity:0.5">逃跑（你无路可逃，需先移动到地图边缘）</span>
+      <</if>>
+      <br>
     <</if>>
-    <br>
 
 
 
@@ -458,12 +463,13 @@
 <<set _it = $ArtificeLibrary[$PendingItem]>>
 
 <div id="EnemyInfo"><<showBattleField>></div>
-<<showGrid>>
 <hr>
 <<= _actor.name>> 准备使用 <strong><<= _it.name>></strong>。<br>
 
 <<if _it.useType === "drink">>
-  /* 喝药对自己，直接用 */
+  /* 喝药对自己，直接用：不选格，显示只读战场图 */
+  <<showGrid>>
+  <br>
   <<set _imText = "使用（" + _it.name + "）">>
   <<capture _imText>>
     <<link _imText>>
@@ -473,7 +479,7 @@
   <</capture>>
   <br>
 <<else>>
-  /* throw/cast/formation：选格。道具射程暂不限(999)，可加item.range后用 */
+  /* throw/cast/formation：选格。gridTargetUI自带地图，不需要showGrid */
   <<set _itRange = _it.range !== undefined ? _it.range : 999>>
   选择目标格：<br>
   <<gridTargetUI _actor _itRange 0 "item" $PendingItem>>
@@ -481,6 +487,7 @@
 
 <hr>
 <<link "返回">><<goto "Battle Player Turn">><</link>>
+
 
 
 
